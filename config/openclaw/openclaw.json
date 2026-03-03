@@ -1,0 +1,50 @@
+{
+  "$comment": "OpenClaw configuration — extends with BMAD + Telegram + cost controls",
+
+  "agent": {
+    "model": "openai/gpt-4o"
+  },
+
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai/gpt-4o",
+        "fallbacks": ["openai/gpt-4o-mini"]
+      },
+      "models": {
+        "anthropic/claude-sonnet-4-20250514": { "alias": "Sonnet" },
+        "anthropic/claude-3-5-haiku-20241022": { "alias": "Haiku" },
+        "openai/gpt-4o": { "alias": "GPT-4o" },
+        "openai/gpt-4o-mini": { "alias": "GPT-4o-mini" }
+      },
+      "workspace": "~/.openclaw/workspace"
+    }
+  },
+
+  "gateway": {
+    "mode": "local",
+    "bind": "127.0.0.1",
+    "tailscale": {
+      "mode": "serve"
+    },
+    "auth": {
+      "mode": "password",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    }
+  },
+
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "dmPolicy": "allowlist",
+      "allowFrom": ["${TELEGRAM_OWNER_ID}"]
+    }
+  },
+
+  "env": {
+    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+    "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+    "OPENAI_BASE_URL": "http://127.0.0.1:4000/v1"
+  }
+}

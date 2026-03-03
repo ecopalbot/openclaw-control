@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BMAD — Multi-Agent Organization</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --bg: #0a0e1a; --surface: #111827; --border: #1f2937;
+      --text: #e5e7eb; --muted: #9ca3af; --accent: #3b82f6;
+      --green: #10b981; --yellow: #f59e0b; --red: #ef4444;
+      --purple: #8b5cf6; --pink: #ec4899;
+    }
+    body { font-family: 'Inter','SF Pro',system-ui,sans-serif; background: var(--bg); color: var(--text); min-height:100vh; }
+    .layout { display: flex; min-height:100vh; }
+    nav { width:200px; background: var(--surface); border-right:1px solid var(--border); padding:16px 0; flex-shrink:0; }
+    nav .brand { padding:12px 16px; font-weight:700; font-size:15px; color: var(--accent); display:flex; align-items:center; gap:8px; }
+    nav .dot { width:8px;height:8px;border-radius:50%;background:var(--green); }
+    nav a { display:block; padding:8px 16px; color: var(--muted); text-decoration:none; font-size:13px; cursor:pointer; transition:0.15s; }
+    nav a:hover, nav a.active { color: var(--text); background:rgba(59,130,246,0.08); }
+    nav a.active { border-left:2px solid var(--accent); }
+    nav .section { padding:12px 16px 4px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#4b5563; }
+    main { flex:1; padding:24px 32px; overflow-y:auto; }
+    h1 { font-size:22px; margin-bottom:4px; }
+    .subtitle { color: var(--muted); font-size:13px; margin-bottom:20px; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:24px; }
+    .card { background: var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
+    .card .label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:4px; display:flex; align-items:center; gap:4px; }
+    .card .value { font-size:26px; font-weight:700; }
+    .card .sub { font-size:11px; color:var(--muted); margin-top:2px; }
+    .card .kes { font-size:14px; color:var(--yellow); font-weight:600; }
+    table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    thead th { text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); border-bottom:1px solid var(--border); }
+    tbody td { padding:10px 12px; font-size:13px; border-bottom:1px solid var(--border); }
+    tbody tr:last-child td { border-bottom:none; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; }
+    .badge-green { background:rgba(16,185,129,0.15); color:var(--green); }
+    .badge-yellow { background:rgba(245,158,11,0.15); color:var(--yellow); }
+    .badge-purple { background:rgba(139,92,246,0.15); color:var(--purple); }
+    .badge-red { background:rgba(239,68,68,0.15); color:var(--red); }
+    .badge-blue { background:rgba(59,130,246,0.15); color:var(--accent); }
+    .dot-active { width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block; }
+    .dot-inactive { width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block; }
+    .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+    .panel h2 { font-size:14px; color:var(--accent); margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px; }
+    .hidden { display:none; }
+    .standup-entry { padding:10px 0; border-bottom:1px solid var(--border); }
+    .standup-entry:last-child { border-bottom:none; }
+    .standup-agent { font-weight:600; color:var(--accent); }
+    .standup-list { margin:4px 0 0 16px; font-size:12px; color:var(--muted); }
+    .standup-list li { margin:2px 0; }
+    .risk-flag { color:var(--red); font-weight:600; }
+    .fx-display { font-size:11px; color:var(--yellow); }
+    button:hover { background:var(--accent); border-color:var(--accent); }
+    /* Organogram styling */
+    .org-tree { display:flex; flex-direction:column; align-items:center; padding:20px 0; gap:30px; }
+    .org-node { background:var(--surface); border:1px solid var(--accent); padding:12px 24px; border-radius:8px; text-align:center; min-width:160px; box-shadow:0 4px 6px rgba(0,0,0,0.3); }
+    .org-node .name { font-weight:700; color:white; font-size:15px; }
+    .org-node .role { font-size:11px; color:var(--muted); margin-top:6px; text-transform:uppercase; letter-spacing:0.5px; }
+    .org-children { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; padding-top:20px; border-top:1px solid var(--border); width:100%; margin-top:10px; }
+    .org-group { display:flex; flex-direction:column; align-items:center; gap:16px; background:rgba(255,255,255,0.02); padding:16px; border-radius:10px; border:1px dashed var(--border); }
+    .org-group-title { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav>
+    <div class="brand"><span class="dot"></span> BMAD</div>
+    <div class="section">Control</div>
+    <a class="active" onclick="showPage('overview')">📊 Overview</a>
+    <a onclick="showPage('organogram')">🌳 Organogram</a>
+    <a onclick="showPage('agents')">🤖 Agents</a>
+    <a onclick="showPage('rooms')">💬 Rooms</a>
+    <a onclick="showPage('standup')">📋 Standup</a>
+    <a onclick="showPage('tasks')">📁 Tasks</a>
+    <a onclick="showPage('cost')">💰 Cost</a>
+    <div class="section">System</div>
+    <a onclick="showPage('system')">🖥 System</a>
+    <a onclick="showPage('settings')">⚙ Settings</a>
+  </nav>
+  <main>
+    <!-- OVERVIEW -->
+    <div id="page-overview">
+      <h1 id="org-name">Loading…</h1>
+      <div class="subtitle" id="org-owner"></div>
+      <div class="cards">
+        <div class="card">
+          <div class="label">💰 Cost Today</div>
+          <div class="value" id="cost-usd">$0.0000</div>
+          <div class="kes" id="cost-kes">KES 0.00</div>
+          <div class="sub" id="cost-calls">0 calls · 0 tokens</div>
+        </div>
+        <div class="card">
+          <div class="label">🤖 Agents</div>
+          <div class="value" id="agent-count">0<span style="font-size:14px;color:var(--muted)">/0</span></div>
+          <div class="sub">Active</div>
+        </div>
+        <div class="card">
+          <div class="label">📁 Tasks</div>
+          <div class="value" id="task-count">0</div>
+          <div class="sub">Active</div>
+        </div>
+        <div class="card">
+          <div class="label">💱 FX Rate</div>
+          <div class="value" id="fx-rate">—</div>
+          <div class="sub">USD → KES</div>
+        </div>
+      </div>
+      <div class="panel"><h2>Recent Commands & Tasks</h2><div id="recent-tasks"><em style="color:var(--muted);font-size:12px">No recent tasks</em></div></div>
+    </div>
+
+    <!-- ORGANOGRAM -->
+    <div id="page-organogram" class="hidden">
+      <h1>🌳 Organization Structure</h1>
+      <div class="subtitle">Agent hierarchy, roles, and topology mapping</div>
+      <div id="org-tree-render" class="org-tree"></div>
+    </div>
+
+    <!-- AGENTS -->
+    <div id="page-agents" class="hidden">
+      <h1>🤖 Organization Agents</h1>
+      <div class="subtitle">10-agent autonomous organization mapped to OpenClaw workspaces</div>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th><th>OpenClaw ID</th><th>Efficiency</th><th>Done/Fail</th><th>Esc.</th><th>Status</th></tr></thead>
+        <tbody id="agents-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- STANDUP -->
+    <div id="page-standup" class="hidden">
+      <h1>📋 Daily Standup</h1>
+      <div class="subtitle">Automatic agent status reports</div>
+      <div class="panel" id="standup-panel"><em style="color:var(--muted);font-size:12px">No standup entries yet</em></div>
+    </div>
+
+    <!-- ROOMS -->
+    <div id="page-rooms" class="hidden">
+      <h1>💬 Communication Rooms</h1>
+      <div class="subtitle">Interact directly with agent teams based on their domain.</div>
+      <div style="display:flex; height:calc(100vh - 160px); gap:16px;">
+        <!-- Room List -->
+        <div style="width:200px; background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-y:auto; padding:8px 0;">
+          <div id="rooms-list" style="display:flex; flex-direction:column;">
+            <em style="color:var(--muted);font-size:12px;padding:12px;text-align:center">Loading rooms...</em>
+          </div>
+        </div>
+        <!-- Chat Area -->
+        <div style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column;">
+          <div style="padding:16px; border-bottom:1px solid var(--border); font-weight:700; color:var(--accent); font-size:15px;" id="active-room-title">📝 Select a room to start</div>
+          
+          <div id="room-messages" style="flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+             <!-- Messages append here -->
+          </div>
+          
+          <div style="padding:16px; border-top:1px solid var(--border); display:flex; gap:12px; background:rgba(0,0,0,0.2); border-radius:0 0 10px 10px;">
+            <input type="text" id="room-input" placeholder="Type instructions, requests, or questions here..." style="flex:1; background:var(--bg); border:1px solid var(--border); color:white; padding:12px 16px; border-radius:8px; outline:none; font-size:14px;" onkeypress="if(event.key==='Enter') sendRoomMessage()">
+            <button onclick="sendRoomMessage()" style="background:var(--accent); color:white; border:none; padding:0 24px; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px;">Send 🚀</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TASKS -->
+    <div id="page-tasks" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1>📁 Tasks</h1>
+          <div class="subtitle">Active and recent tasks across all agents</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <input type="text" id="task-search" placeholder="Search tasks..." onkeyup="if(event.key==='Enter'){taskPage=1;loadTasks();}" style="background:var(--bg); border:1px solid var(--border); color:white; padding:6px 10px; border-radius:6px; font-size:13px;">
+          <select id="task-agent-filter" onchange="taskPage=1;loadTasks()" style="background:var(--bg); border:1px solid var(--border); color:white; padding:6px 10px; border-radius:6px; font-size:13px;">
+            <option value="">All Agents</option>
+          </select>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Task</th><th>Agent</th><th>Status</th><th>Phase/Kanban</th><th>Tokens</th><th>Actions</th></tr></thead>
+        <tbody id="tasks-tbody"></tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:13px;">
+        <button onclick="if(taskPage>1){taskPage--;loadTasks()}" style="background:var(--surface);border:1px solid var(--border);color:white;padding:4px 8px;border-radius:4px;cursor:pointer;">Previous</button>
+        <span id="task-page-display">Page 1</span>
+        <button onclick="taskPage++;loadTasks()" style="background:var(--surface);border:1px solid var(--border);color:white;padding:4px 8px;border-radius:4px;cursor:pointer;">Next</button>
+      </div>
+    </div>
+
+    <!-- COST & PREDICTIVE ANALYTICS -->
+    <div id="page-cost" class="hidden">
+      <h1>💰 Cost & Decision Analytics</h1>
+      <div class="subtitle">Predictive cost engine, token usage, and automated decision logs</div>
+      
+      <div class="panel" style="background:rgba(59,130,246,0.03); border-color:rgba(59,130,246,0.2);">
+        <h2>🔥 Predictive Burn Rate</h2>
+        <div class="cards" style="margin-top:10px; margin-bottom:0;">
+          <div class="card"><div class="label">Current Burn / Hr</div><div class="value" id="burn-rate-usd">$0.00</div><div class="sub" id="burn-rate-tokens">0 tokens/hr</div></div>
+          <div class="card"><div class="label">Projected 7 Days</div><div class="value" id="proj-7d">$0.00</div></div>
+          <div class="card"><div class="label">Projected 30 Days</div><div class="value" id="proj-30d">$0.00</div></div>
+          <div class="card"><div class="label">Budget Alert</div><div class="value" id="budget-alert" style="color:var(--green)">SAFE</div><div class="sub" id="budget-usage-pct">0% threshold</div></div>
+        </div>
+      </div>
+
+      <div class="panel"><h2>Decision Audit Log</h2><p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Track automatic model downgrades, budget triggers, and policy escalations.</p>
+        <table><thead><tr><th>Time</th><th>Agent</th><th>Action</th><th>Reason & Details</th></tr></thead><tbody id="decisions-tbody">
+          <tr><td colspan="4" style="color:var(--muted);text-align:center">No decisions logged</td></tr>
+        </tbody></table>
+      </div>
+
+      <div class="cards">
+        <div class="card"><div class="label">Today (USD)</div><div class="value" id="cost-today-usd">$0.00</div></div>
+        <div class="card"><div class="label">Today (KES)</div><div class="value kes" id="cost-today-kes">KES 0</div></div>
+        <div class="card"><div class="label">Hard Limit</div><div class="value" id="cost-hard-limit">$25.00</div></div>
+        <div class="card"><div class="label">Budget Used</div><div class="value" id="cost-pct">0%</div></div>
+      </div>
+      <div class="panel"><h2>Usage By Agent</h2><table><thead><tr><th>Agent</th><th>Tokens</th><th>Cost (USD)</th><th>Cost (KES)</th></tr></thead><tbody id="usage-tbody"></tbody></table></div>
+    </div>
+
+    <!-- SYSTEM -->
+    <div id="page-system" class="hidden">
+      <h1>🖥 System Health</h1>
+      <div class="subtitle">VPS metrics and service status</div>
+      <div class="cards" id="system-cards">
+        <div class="card"><div class="label">CPU</div><div class="value" id="sys-cpu">—</div></div>
+        <div class="card"><div class="label">Memory</div><div class="value" id="sys-mem">—</div></div>
+        <div class="card"><div class="label">Disk</div><div class="value" id="sys-disk">—</div></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="page-settings" class="hidden">
+      <h1>⚙ Settings</h1>
+      <div class="subtitle">Organization and governance configuration</div>
+      <div class="panel"><h2>Organization</h2><p style="font-size:13px;color:var(--muted)" id="settings-org">Loading…</p></div>
+      <div class="panel"><h2>Autonomy Model</h2>
+        <p style="font-size:12px;color:var(--muted)">Default: Semi-autonomous. Agents execute within budget guardrails. Executive intervenes only for: budget breaches, risk flags, production deploys, paid ads, data deletion.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const API = window.location.origin + '/api';
+let FX_RATE = 129.50;
+let currentRoom = null;
+let taskPage = 1;
+
+function toKES(usd) { return (parseFloat(usd) * FX_RATE).toFixed(2); }
+function autonomyBadge(level) {
+  const labels = {0:'L0 · Escalation Only',1:'L1 · Advisory',2:'L2 · Semi-Auto',3:'L3 · Full Auto'};
+  const colors = {0:'badge-red',1:'badge-yellow',2:'badge-green',3:'badge-purple'};
+  return `<span class="badge ${colors[level]||'badge-blue'}">${labels[level]||'L'+level}</span>`;
+}
+function roleBadge(role) {
+  const colors = {executive:'badge-red',product:'badge-blue',ux:'badge-pink',governance:'badge-yellow',
+    architect:'badge-purple',developer:'badge-green',devops:'badge-blue',qa:'badge-yellow',
+    marketing:'badge-green',research:'badge-purple'};
+  return `<span class="badge ${colors[role]||'badge-blue'}">${role}</span>`;
+}
+
+function showPage(id) {
+  document.querySelectorAll('main > div').forEach(d => d.classList.add('hidden'));
+  document.getElementById('page-'+id).classList.remove('hidden');
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+async function selectRoom(id, name) {
+  currentRoom = id;
+  document.getElementById('active-room-title').textContent = `📝 ${name} Room`;
+  document.querySelectorAll('.room-item').forEach(el => el.style.background = 'transparent');
+  const btn = document.getElementById(`room-btn-${id}`);
+  if (btn) btn.style.background = 'rgba(59,130,246,0.1)';
+  await fetchMessages();
+}
+
+async function fetchMessages() {
+  if (!currentRoom) return;
+  try {
+    const res = await fetch(API+'/rooms/'+currentRoom+'/messages');
+    if (res.ok) {
+      const msgs = await res.json();
+      const container = document.getElementById('room-messages');
+      container.innerHTML = msgs.map(m => `
+        <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:8px; border-left:2px solid ${m.sender.includes('Agent') ? 'var(--purple)' : 'var(--accent)'};">
+          <div style="font-size:11px; color:var(--muted); margin-bottom:4px; display:flex; justify-content:space-between;">
+            <strong>${m.sender}</strong> <span>${new Date(m.created_at).toLocaleTimeString()}</span>
+          </div>
+          <div style="font-size:13px; line-height:1.4; white-space:pre-wrap;">${m.message}</div>
+        </div>
+      `).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+  } catch (e) {}
+}
+
+async function sendRoomMessage() {
+  if (!currentRoom) return;
+  const input = document.getElementById('room-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  
+  const container = document.getElementById('room-messages');
+  container.innerHTML += `
+    <div style="background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:8px; border-left:2px solid var(--accent); opacity:0.7">
+      <div style="font-size:11px; color:var(--muted); margin-bottom:4px;"><strong>Executive</strong></div>
+      <div style="font-size:13px; line-height:1.4; white-space:pre-wrap;">${msg}</div>
+    </div>
+  `;
+  container.scrollTop = container.scrollHeight;
+
+  await fetch(API+'/rooms/'+currentRoom+'/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sender: 'Executive', message: msg })
+  });
+  fetchMessages();
+}
+
+let pendingStopId = null;
+async function stopTask(id, btn) {
+  if (pendingStopId !== id) {
+    pendingStopId = id;
+    if(btn) { btn.textContent = 'Confirm?'; btn.style.background = 'var(--red)'; }
+    setTimeout(() => {
+      if (pendingStopId === id) {
+        pendingStopId = null;
+        loadTasks();
+      }
+    }, 3000);
+    return;
+  }
+  
+  pendingStopId = null;
+  if(btn) btn.textContent = 'Stopping...';
+  await fetch(API+'/tasks/'+id+'/status', {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({status:'cancelled'})
+  });
+  loadTasks();
+}
+
+async function loadTasks() {
+  const search = document.getElementById('task-search')?.value || '';
+  const agent_id = document.getElementById('task-agent-filter')?.value || '';
+  const query = new URLSearchParams({ page: taskPage, limit: 15 });
+  if (search) query.append('search', search);
+  if (agent_id) query.append('agent_id', agent_id);
+  
+  const taskRes = await fetch(API+'/tasks?' + query.toString());
+  if (taskRes.ok) {
+    const tasks = await taskRes.json();
+    document.getElementById('task-page-display').textContent = `Page ${taskPage}`;
+    document.getElementById('task-count').textContent = tasks.filter(t => t.status === 'in_progress' || t.status === 'pending').length;
+    const ttbody = document.getElementById('tasks-tbody');
+    ttbody.innerHTML = tasks.map(t => {
+      let badge = 'badge-yellow';
+      if(t.status === 'in_progress') badge = 'badge-green';
+      if(t.status === 'completed') badge = 'badge-blue';
+      if(t.status === 'cancelled') badge = 'badge-red';
+      
+      let actBtn = '';
+      if (t.status === 'in_progress' || t.status === 'pending') {
+        if (pendingStopId === t.id) {
+          actBtn = `<button onclick="stopTask('${t.id}', this)" style="background:var(--red);border:none;color:white;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;">Confirm?</button>`;
+        } else {
+          actBtn = `<button onclick="stopTask('${t.id}', this)" style="background:#500;border:none;color:white;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;">Stop</button>`;
+        }
+      }
+      
+      return `<tr>
+      <td>${t.title||'Untitled'}</td><td>${t.agent_name||'—'}</td>
+      <td><span class="badge ${badge}">${t.status}</span></td>
+      <td>${t.phase || t.kanban_column || '—'}</td><td>${t.total_tokens||0}</td>
+      <td>${actBtn}</td>
+    </tr>`}).join('') || '<tr><td colspan="6" style="color:var(--muted);text-align:center">No tasks found</td></tr>';
+  }
+}
+
+async function loadData() {
+  try {
+    // FX Rate
+    try {
+      const fxRes = await fetch(API+'/fx-rate');
+      if (fxRes.ok) { const fx = await fxRes.json(); if (fx.rate) FX_RATE = parseFloat(fx.rate); }
+    } catch(e) {}
+    document.getElementById('fx-rate').textContent = FX_RATE.toFixed(2);
+
+    // Org
+    const orgRes = await fetch(API+'/org');
+    if (orgRes.ok) {
+      const org = await orgRes.json();
+      document.getElementById('org-name').textContent = org.name || 'Organization';
+      document.getElementById('org-owner').textContent = org.owner_identity || '';
+      document.getElementById('settings-org').textContent = `${org.name} — ${org.owner_identity}`;
+    }
+
+    // Agents
+    const agentsRes = await fetch(API+'/agents');
+    if (agentsRes.ok) {
+      const agents = await agentsRes.json();
+      const active = agents.filter(a => a.active).length;
+      document.getElementById('agent-count').innerHTML = `${active}<span style="font-size:14px;color:var(--muted)">/${agents.length}</span>`;
+      const tbody = document.getElementById('agents-tbody');
+      tbody.innerHTML = agents.map(a => {
+        let effColor = 'var(--green)';
+        if (a.efficiency_score < 80) effColor = 'var(--yellow)';
+        if (a.efficiency_score < 50) effColor = 'var(--red)';
+        return `<tr>
+          <td><strong>${a.name}</strong></td>
+          <td>${roleBadge(a.role)}</td>
+          <td><code style="font-size:11px;color:var(--accent)">${a.openclaw_agent_id}</code></td>
+          <td><strong style="color:${effColor}">${a.efficiency_score}%</strong></td>
+          <td><span style="color:var(--green)">${a.tasks_completed||0}</span> / <span style="color:var(--red)">${a.tasks_failed||0}</span></td>
+          <td><span class="badge ${a.escalation_count > 0 ? 'badge-yellow' : 'badge-green'}">${a.escalation_count||0}</span></td>
+          <td>${a.active ? '<span class="dot-active"></span>' : '<span class="dot-inactive"></span>'}</td>
+        </tr>`;
+      }).join('');
+      
+      // Populate agent filter if empty
+      const agentFilter = document.getElementById('task-agent-filter');
+      if (agentFilter && agentFilter.options.length <= 1) {
+        agents.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.id;
+          opt.textContent = a.name;
+          agentFilter.appendChild(opt);
+        });
+      }
+      
+      // Build Organogram
+      const main = agents.find(a => a.name.toLowerCase() === 'main' || a.role === 'executive') || {name:'Main', role:'Orchestrator'};
+      const subs = agents.filter(a => a.name.toLowerCase() !== 'main' && a.role !== 'executive');
+      
+      const buildNode = (a) => `<div class="org-node"><div class="name">${a.name}</div><div class="role">${roleBadge(a.role)}</div></div>`;
+      
+      document.getElementById('org-tree-render').innerHTML = `
+        ${buildNode(main)}
+        <div class="org-children">
+          <div class="org-group"><div class="org-group-title">Strategy & Intelligence</div>
+            ${subs.filter(a => ['product','research','governance'].includes(a.role)).map(buildNode).join('') || '—'}
+          </div>
+          <div class="org-group"><div class="org-group-title">Engineering</div>
+            ${subs.filter(a => ['architect','developer','devops','qa'].includes(a.role)).map(buildNode).join('') || '—'}
+          </div>
+          <div class="org-group"><div class="org-group-title">Growth & Operations</div>
+            ${subs.filter(a => !['product','research','governance','architect','developer','devops','qa'].includes(a.role)).map(buildNode).join('') || '—'}
+          </div>
+        </div>
+      `;
+    }
+
+    // Rooms
+    try {
+      const roomRes = await fetch(API+'/rooms');
+      if (roomRes.ok) {
+        const rooms = await roomRes.json();
+        const list = document.getElementById('rooms-list');
+        // Only update if it hasn't been built or we want to refresh
+        if (list.innerHTML.includes('Loading rooms...')) {
+            list.innerHTML = rooms.map(r => `
+              <div onclick="selectRoom('${r.id}', '${r.name}')" style="padding:12px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px;" class="room-item" id="room-btn-${r.id}">
+                <strong style="color:var(--text)"># ${r.name}</strong>
+                <div style="font-size:10px; color:var(--muted); margin-top:4px;">${r.agents.join(', ')}</div>
+              </div>
+            `).join('');
+        }
+      }
+      if (currentRoom) fetchMessages();
+    } catch(e) {}
+
+    // Cost
+    const costRes = await fetch(API+'/cost/today');
+    if (costRes.ok) {
+      const cost = await costRes.json();
+      const usd = parseFloat(cost.total_cost || 0);
+      document.getElementById('cost-usd').textContent = `$${usd.toFixed(4)}`;
+      document.getElementById('cost-kes').textContent = `KES ${toKES(usd)}`;
+      document.getElementById('cost-calls').textContent = `${cost.call_count||0} calls · ${cost.total_tokens||0} tokens`;
+      document.getElementById('cost-today-usd').textContent = `$${usd.toFixed(4)}`;
+      document.getElementById('cost-today-kes').textContent = `KES ${toKES(usd)}`;
+      const limit = 25; // hard limit
+      document.getElementById('cost-pct').textContent = `${((usd/limit)*100).toFixed(1)}%`;
+    }
+    
+    // Cost by Agent
+    try {
+      const usageRes = await fetch(API+'/cost/by-agent');
+      if (usageRes.ok) {
+        const usage = await usageRes.json();
+        const ubbody = document.getElementById('usage-tbody');
+        ubbody.innerHTML = Object.entries(usage).map(([name, data]) => `<tr>
+          <td><strong>${name}</strong></td>
+          <td>${data.tokens.toLocaleString()}</td>
+          <td>$${data.cost.toFixed(4)}</td>
+          <td class="kes">KES ${toKES(data.cost)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted);text-align:center">No usage today</td></tr>';
+      }
+    } catch(e) {}
+
+    // Predictive Cost Engine
+    try {
+      const projRes = await fetch(API+'/cost/projection');
+      if (projRes.ok) {
+        const proj = await projRes.json();
+        document.getElementById('burn-rate-usd').textContent = `$${proj.cost_per_hour}`;
+        document.getElementById('burn-rate-tokens').textContent = `${parseFloat(proj.tokens_per_hour).toLocaleString()} tokens/hr`;
+        document.getElementById('proj-7d').textContent = `$${proj.proj_7d}`;
+        document.getElementById('proj-30d').textContent = `$${proj.proj_30d}`;
+        
+        const alertEl = document.getElementById('budget-alert');
+        const pctEl = document.getElementById('budget-usage-pct');
+        pctEl.textContent = `${proj.usage_pct}% allocated`;
+        const pct = parseFloat(proj.usage_pct);
+        if (pct >= 95) { alertEl.textContent = 'FROZEN'; alertEl.style.color = 'var(--red)'; }
+        else if (pct >= 85) { alertEl.textContent = 'RESTRICTED'; alertEl.style.color = 'var(--yellow)'; }
+        else if (pct >= 70) { alertEl.textContent = 'ECONOMY'; alertEl.style.color = 'var(--yellow)'; }
+        else { alertEl.textContent = 'SAFE'; alertEl.style.color = 'var(--green)'; }
+      }
+    } catch(e) {}
+
+    // Decision Audit Log
+    try {
+      const decRes = await fetch(API+'/cost/decisions');
+      if (decRes.ok) {
+        const logs = await decRes.json();
+        const dtbody = document.getElementById('decisions-tbody');
+        if (logs.length > 0) {
+          dtbody.innerHTML = logs.map(d => `<tr>
+            <td style="font-size:11px;color:var(--muted)">${new Date(d.created_at).toLocaleString()}</td>
+            <td><strong>${d.agent_name || 'SYSTEM'}</strong></td>
+            <td><span class="badge ${d.action==='model_switch'?'badge-purple':(d.action==='budget_trigger'?'badge-yellow':'badge-red')}">${d.action}</span></td>
+            <td>${d.reason} <br><code style="font-size:10px;color:var(--muted)">${JSON.stringify(d.details||{})}</code></td>
+          </tr>`).join('');
+        }
+      }
+    } catch(e) {}
+
+    // Tasks (load dynamic page)
+    await loadTasks();
+
+    // Commands (Overview Recent Activity)
+    try {
+      const cmdRes = await fetch(API+'/commands');
+      if (cmdRes.ok) {
+        const cmds = await cmdRes.json();
+        const recentDiv = document.getElementById('recent-tasks');
+        if(cmds.length > 0) {
+           recentDiv.innerHTML = cmds.slice(0,5).map(c => `
+             <div style="font-size:12px; border-bottom:1px solid var(--border); padding:8px 0;">
+               <strong style="color:var(--accent)">${new Date(c.created_at).toLocaleTimeString()}</strong>: 
+               <code style="background:rgba(255,255,255,0.05);padding:2px 4px;border-radius:4px">${c.command}</code> 
+               <span style="color:var(--muted)">[${c.status}]</span>
+             </div>
+           `).join('');
+        }
+      }
+    } catch(e) {}
+
+    // Standup
+    try {
+      const standupRes = await fetch(API+'/standup');
+      if (standupRes.ok) {
+        const entries = await standupRes.json();
+        const panel = document.getElementById('standup-panel');
+        if (entries.length) {
+          panel.innerHTML = entries.map(e => `<div class="standup-entry">
+            <div class="standup-agent">${e.agent_name}</div>
+            ${e.done?.length ? `<div class="standup-list"><strong>Done:</strong><ul>${e.done.map(d=>`<li>✅ ${d}</li>`).join('')}</ul></div>` : ''}
+            ${e.in_progress?.length ? `<div class="standup-list"><strong>In Progress:</strong><ul>${e.in_progress.map(d=>`<li>🔄 ${d}</li>`).join('')}</ul></div>` : ''}
+            ${e.blockers?.length ? `<div class="standup-list"><strong>Blockers:</strong><ul>${e.blockers.map(d=>`<li>🚫 ${d}</li>`).join('')}</ul></div>` : ''}
+            ${e.risk_flags?.length ? `<div class="standup-list risk-flag"><strong>⚠ Risks:</strong><ul>${e.risk_flags.map(d=>`<li>${d}</li>`).join('')}</ul></div>` : ''}
+          </div>`).join('');
+        }
+      }
+    } catch(e) {}
+
+    // System
+    try {
+      const sysRes = await fetch(API+'/system/health');
+      if (sysRes.ok) {
+        const sys = await sysRes.json();
+        document.getElementById('sys-cpu').textContent = sys.cpu || '—';
+        document.getElementById('sys-mem').textContent = sys.memory || '—';
+        document.getElementById('sys-disk').textContent = sys.disk || '—';
+      }
+    } catch(e) {}
+  } catch (e) { console.error('Load error:', e); }
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+SHELL=/bin/bash
+
+# System metrics every 15 minutes
+*/15 * * * * /opt/openclaw/monitoring/collect-metrics.sh >> /var/log/openclaw/metrics.log 2>&1
+
+# Daily cost report at 23:55 UTC
+55 23 * * * /opt/openclaw/monitoring/daily-cost-report.sh >> /var/log/openclaw/cost-report.log 2>&1
+
+# =========================================================================
+# BMAD Intelligence & Routine Operations
+# =========================================================================
+
+# Sync Organization state (every 30 mins)
+*/30 * * * * cd /home/droid/openclaw-control && /home/droid/.npm-global/bin/node proxy/org_sync.js >> /var/log/openclaw/org_sync.log 2>&1
+
+# Morning Brief (07:00 EST or timezone local)
+0 7 * * * cd /home/droid/openclaw-control && /home/droid/.npm-global/bin/node proxy/intelligence.js morning >> /var/log/openclaw/morning_brief.log 2>&1
+
+# Daily Standup (09:00 EST)
+0 9 * * * cd /home/droid/openclaw-control && /home/droid/.npm-global/bin/node proxy/intelligence.js standup >> /var/log/openclaw/standup.log 2>&1
+
+# Midday Cost Check (12:00 PM)
+0 12 * * * cd /home/droid/openclaw-control && /home/droid/.npm-global/bin/node proxy/intelligence.js midday >> /var/log/openclaw/midday.log 2>&1
+
+# Performance Snapshot (18:00)
+0 18 * * * cd /home/droid/openclaw-control && /home/droid/.npm-global/bin/node proxy/intelligence.js performance >> /var/log/openclaw/performance.log 2>&1
+
+# Evening Recap (20:00)
+0 20 * * * cd /home/droid/openclaw-control && /home/droid/.npm-global/bin/node proxy/intelligence.js evening >> /var/log/openclaw/evening_recap.log 2>&1

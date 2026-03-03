@@ -1,0 +1,19 @@
+# Secrets
+.env
+*.env.local
+
+# Node
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build
+dist/

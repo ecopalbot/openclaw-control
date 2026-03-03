@@ -1,0 +1,25 @@
+[Unit]
+Description=OpenClaw AI Agent Runtime
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+Group=openclaw
+WorkingDirectory=/opt/openclaw
+ExecStart=/usr/bin/openclaw serve --config /etc/openclaw/openclaw.json
+Restart=always
+RestartSec=10
+EnvironmentFile=/etc/openclaw/env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/openclaw /opt/openclaw
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

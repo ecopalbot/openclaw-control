@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenClaw Dashboard
+After=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+Group=openclaw
+WorkingDirectory=/opt/openclaw
+ExecStart=/usr/bin/node /opt/openclaw/dashboard/server.js
+Restart=always
+RestartSec=5
+EnvironmentFile=/etc/openclaw/env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-dashboard
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
