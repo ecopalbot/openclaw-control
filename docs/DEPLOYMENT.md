@@ -8,6 +8,30 @@
 - UFW configured: default deny inbound
 - OpenClaw installed globally (`npm i -g openclaw`)
 
+## Deployment — Hybrid Twin Installation
+
+### 1. VPS Setup (The General)
+
+- Standard install via `openclaw-install.sh`
+- Configure `.env` with Supabase + LLM keys
+- Start services: `pm2 start proxy/server.js`, `pm2 start proxy/telegram-voice.js`
+
+### 2. Mac Setup (The Soldier)
+
+- Install Tailscale & Join Tailnet
+- Install OpenClaw: `npm install -g openclaw`
+- Configure local worker: `openclaw config init`
+- Mount workspace to project: `~/.openclaw/workspace` -> `openclaw-control/workspace`
+- Restart with loopback/tailnet bind
+- Start Bridge: `BRIDGE_TOKEN=... node proxy/local-bridge.js &`
+
+### 3. Connection
+
+- Ensure VPS has Mac's Tailscale IP in `MAC_TAILSCALE_IP`
+- Pushing updates: `node proxy/soul-sync.js push` from VPS to sync instructions to Mac.d and connected
+- UFW configured: default deny inbound
+- OpenClaw installed globally (`npm i -g openclaw`)
+
 ## Step 1: Clone Repository
 
 ```bash

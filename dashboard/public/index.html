@@ -7,34 +7,57 @@
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     :root {
-      --bg: #0a0e1a; --surface: #111827; --border: #1f2937;
-      --text: #e5e7eb; --muted: #9ca3af; --accent: #3b82f6;
-      --green: #10b981; --yellow: #f59e0b; --red: #ef4444;
-      --purple: #8b5cf6; --pink: #ec4899;
+      --bg: #05070a; --surface: #0c111d; --border: #1e293b;
+      --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8;
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+      --purple: #a855f7; --pink: #ec4899;
+      --glow-blue: rgba(56, 189, 248, 0.1);
     }
-    body { font-family: 'Inter','SF Pro',system-ui,sans-serif; background: var(--bg); color: var(--text); min-height:100vh; }
+    body { 
+      font-family: 'Inter','SF Pro',system-ui,sans-serif; 
+      background: var(--bg); color: var(--text); min-height:100vh;
+      background-image: radial-gradient(circle at 50% 50%, #111827 0%, #05070a 100%);
+    }
     .layout { display: flex; min-height:100vh; }
-    nav { width:200px; background: var(--surface); border-right:1px solid var(--border); padding:16px 0; flex-shrink:0; }
-    nav .brand { padding:12px 16px; font-weight:700; font-size:15px; color: var(--accent); display:flex; align-items:center; gap:8px; }
-    nav .dot { width:8px;height:8px;border-radius:50%;background:var(--green); }
-    nav a { display:block; padding:8px 16px; color: var(--muted); text-decoration:none; font-size:13px; cursor:pointer; transition:0.15s; }
-    nav a:hover, nav a.active { color: var(--text); background:rgba(59,130,246,0.08); }
-    nav a.active { border-left:2px solid var(--accent); }
-    nav .section { padding:12px 16px 4px; font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#4b5563; }
-    main { flex:1; padding:24px 32px; overflow-y:auto; }
-    h1 { font-size:22px; margin-bottom:4px; }
-    .subtitle { color: var(--muted); font-size:13px; margin-bottom:20px; }
-    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:24px; }
-    .card { background: var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
-    .card .label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:4px; display:flex; align-items:center; gap:4px; }
-    .card .value { font-size:26px; font-weight:700; }
+    nav { 
+      width:240px; background: var(--surface); border-right:1px solid var(--border); 
+      padding:24px 0; flex-shrink:0; box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+    }
+    nav .brand { 
+      padding:0 24px 24px; font-weight:900; font-size:18px; color: var(--accent); 
+      display:flex; align-items:center; gap:10px; letter-spacing: 2px;
+      text-shadow: 0 0 10px var(--glow-blue);
+    }
+    nav .dot { width:10px;height:10px;border-radius:50%;background:var(--green); box-shadow: 0 0 8px var(--green); }
+    nav a { 
+      display:block; padding:12px 24px; color: var(--muted); text-decoration:none; 
+      font-size:13px; cursor:pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border-left: 3px solid transparent;
+    }
+    nav a:hover { color: var(--text); background:rgba(56, 189, 248, 0.05); }
+    nav a.active { color: var(--text); background:rgba(56, 189, 248, 0.1); border-left-color: var(--accent); }
+    nav .section { 
+      padding:24px 24px 8px; font-size:10px; text-transform:uppercase; 
+      letter-spacing:1.5px; color:#475569; font-weight: 800;
+    }
+    main { flex:1; padding:32px 48px; overflow-y:auto; }
+    h1 { font-size:28px; font-weight: 800; margin-bottom:6px; letter-spacing: -0.5px; }
+    .subtitle { color: var(--muted); font-size:14px; margin-bottom:32px; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; margin-bottom:32px; }
+    .card { 
+      background: var(--surface); border:1px solid var(--border); border-radius:12px; 
+      padding:20px; transition: transform 0.2s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    .card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .card .label { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+    .card .value { font-size:28px; font-weight:800; color: #fff; }
     .card .sub { font-size:11px; color:var(--muted); margin-top:2px; }
     .card .kes { font-size:14px; color:var(--yellow); font-weight:600; }
-    table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
-    thead th { text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); border-bottom:1px solid var(--border); }
-    tbody td { padding:10px 12px; font-size:13px; border-bottom:1px solid var(--border); }
+    table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top: 8px; }
+    thead th { text-align:left; padding:12px; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); border-bottom:1px solid var(--border); }
+    tbody td { padding:14px 12px; font-size:14px; border-bottom:1px solid var(--border); vertical-align: middle; }
     tbody tr:last-child td { border-bottom:none; }
-    .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; text-transform: uppercase; }
     .badge-green { background:rgba(16,185,129,0.15); color:var(--green); }
     .badge-yellow { background:rgba(245,158,11,0.15); color:var(--yellow); }
     .badge-purple { background:rgba(139,92,246,0.15); color:var(--purple); }
@@ -66,17 +89,19 @@
 <body>
 <div class="layout">
   <nav>
-    <div class="brand"><span class="dot"></span> BMAD</div>
-    <div class="section">Control</div>
-    <a class="active" onclick="showPage('overview')">📊 Overview</a>
-    <a onclick="showPage('organogram')">🌳 Organogram</a>
-    <a onclick="showPage('agents')">🤖 Agents</a>
-    <a onclick="showPage('rooms')">💬 Rooms</a>
+    <div class="brand"><span class="dot"></span> MISSION CONTROL</div>
+    <div class="section">Intelligence</div>
+    <a class="active" onclick="showPage('overview')">📊 Org Overview</a>
+    <a onclick="showPage('knowledge')">🧠 Learned Skills</a>
+    <a onclick="showPage('docs')">📚 Knowledge Base</a>
+    <div class="section">Operations</div>
+    <a onclick="showPage('agents')">🤖 Agent Army</a>
+    <a onclick="showPage('tasks')">📁 Task Stream</a>
+    <a onclick="showPage('rooms')">💬 Command Rooms</a>
     <a onclick="showPage('standup')">📋 Standup</a>
-    <a onclick="showPage('tasks')">📁 Tasks</a>
-    <a onclick="showPage('cost')">💰 Cost</a>
+    <a onclick="showPage('cost')">💰 Decision Bank</a>
     <div class="section">System</div>
-    <a onclick="showPage('system')">🖥 System</a>
+    <a onclick="showPage('system')">🖥 VPS Health</a>
     <a onclick="showPage('settings')">⚙ Settings</a>
   </nav>
   <main>
@@ -110,11 +135,31 @@
       <div class="panel"><h2>Recent Commands & Tasks</h2><div id="recent-tasks"><em style="color:var(--muted);font-size:12px">No recent tasks</em></div></div>
     </div>
 
-    <!-- ORGANOGRAM -->
-    <div id="page-organogram" class="hidden">
-      <h1>🌳 Organization Structure</h1>
-      <div class="subtitle">Agent hierarchy, roles, and topology mapping</div>
-      <div id="org-tree-render" class="org-tree"></div>
+    <!-- LEARNED SKILLS (Vector Memory) -->
+    <div id="page-knowledge" class="hidden">
+      <h1>🧠 Learned Skills</h1>
+      <div class="subtitle">Autonomous retrieval-augmented memories (Vector Base)</div>
+      <div class="panel">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:15px;">These are tactical solutions the AI has added to its long-term memory. It will check these before every task.</p>
+        <table>
+          <thead><tr><th>Created</th><th>Memory Instance</th><th>Source</th></tr></thead>
+          <tbody id="knowledge-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- KNOWLEDGE BASE (Docs) -->
+    <div id="page-docs" class="hidden">
+      <h1>📚 Knowledge Base</h1>
+      <div class="subtitle">Peter's Project Documentation & Manuals</div>
+      <div style="display:flex; gap:20px; height:calc(100vh - 180px);">
+        <div id="docs-list" style="width:240px; background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-y:auto; padding:10px;">
+          <!-- Doc list -->
+        </div>
+        <div class="panel" style="flex:1; overflow-y:auto; background:rgba(0,0,0,0.1);">
+          <div id="doc-viewer" style="font-size:14px; line-height:1.6; white-space:pre-wrap; color:var(--text);">Select a manual to view...</div>
+        </div>
+      </div>
     </div>
 
     <!-- AGENTS -->
@@ -535,6 +580,34 @@ async function loadData() {
             <td>${d.reason} <br><code style="font-size:10px;color:var(--muted)">${JSON.stringify(d.details||{})}</code></td>
           </tr>`).join('');
         }
+      }
+    } catch(e) {}
+
+    // Learned Skills (Knowledge)
+    try {
+      const kRes = await fetch(API+'/knowledge');
+      if (kRes.ok) {
+        const skills = await kRes.json();
+        const kbbody = document.getElementById('knowledge-tbody');
+        kbbody.innerHTML = skills.map(k => `<tr>
+          <td style="font-size:11px;color:var(--muted)">${new Date(k.created_at).toLocaleString()}</td>
+          <td>${k.content}</td>
+          <td><span class="badge badge-purple">${k.metadata?.source || 'autonomous'}</span></td>
+        </tr>`).join('') || '<tr><td colspan="3" style="color:var(--muted);text-align:center">No learned skills yet</td></tr>';
+      }
+    } catch(e) {}
+
+    // Docs (Knowledge Base)
+    try {
+      const dRes = await fetch(API+'/docs');
+      if (dRes.ok) {
+        const docs = await dRes.json();
+        const docsList = document.getElementById('docs-list');
+        docsList.innerHTML = docs.map(d => `
+          <div onclick="document.getElementById('doc-viewer').textContent = ${JSON.stringify(d.content)}" style="padding:10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:12px; color:var(--muted);">
+            📘 ${d.name}
+          </div>
+        `).join('');
       }
     } catch(e) {}
 

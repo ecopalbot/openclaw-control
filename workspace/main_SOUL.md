@@ -37,6 +37,6 @@ Instead, when you need to delegate a task to a sub-agent:
 3. The command syntax MUST be exactly: `openclaw agent --agent <AGENT_ID> --message "<DETAILED_TASK_DESCRIPTION>"`
 4. Example: `openclaw agent --agent research --message "Identify 3 real pain points from Kenyan automotive garage forums..."`
 5. Since the agent will run in the background, you can dispatch multiple agents sequentially using `bash`, and they will process their tasks independently.
-6. **CRITICAL DASHBOARD SINK**: After reading `ORG_SNAPSHOT.json` and before executing `openclaw agent ...`, you MUST register each delegated sub-task to the Control Dashboard database so the Executive can track it. Execute this exact bash command (replace variables accordingly):
-   `curl -X POST http://127.0.0.1:3001/api/tasks -H "Content-Type: application/json" -d '{"title": "Summary of Task", "description": "Full task string", "assigned_agent_id": "the_agent_id", "kanban_column": "in_progress"}'`
+6. **Unified Task Protocol**: Before executing `openclaw agent ...`, you MUST register the sub-task using the `bmad` CLI so the Executive can track it visually on the dashboard:
+   - `bmad task start "Task Title" "Full description of what the agent is doing"`
 7. Do NOT try to message them directly in chat or apologize for sessions not being found. You have the `bash` tool to spin them up yourself via the CLI.

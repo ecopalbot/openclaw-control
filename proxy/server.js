@@ -164,12 +164,12 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     // 3.5 Auto-Adaptation Logic
     if (pct > 95) {
-      if (agentName !== 'main' && agentName !== 'executive' && agentName !== 'donna') {
+      if (agentName !== 'main' && agentName !== 'executive' && agentName !== 'ops' && agentName !== 'builder') {
          await logDecision({ agentId, action: 'budget_trigger', reason: `>95% block (${pct.toFixed(1)}%)`, details: { model }});
          return res.status(429).json({ error: { message: `Budget > 95%. Non-critical agent frozen.` } });
       }
     } else if (pct > 85) {
-      if (model.includes('gpt-4') && agentName !== 'main' && agentName !== 'executive') {
+      if (model.includes('gpt-4') && agentName !== 'main' && agentName !== 'executive' && agentName !== 'ops' && agentName !== 'builder') {
         model = 'openai/moonshot-v1-8k';
         didDowngrade = true;
       }

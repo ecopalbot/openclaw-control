@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw Bridge Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --glass-bg: rgba(15, 15, 20, 0.7);
+            --accent: #00f2ff;
+            --accent-glow: rgba(0, 242, 255, 0.3);
+            --danger: #ff4b2b;
+            --safe: #00ff87;
+        }
+
+        body {
+            background: #0a0a0f;
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background-image: radial-gradient(circle at 50% -20%, #1a1a2e 0%, #0a0a0f 100%);
+        }
+
+        /* Sidebar / Controls */
+        #controls {
+            width: 350px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255,255,255,0.1);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            z-index: 100;
+        }
+
+        .status-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+        }
+
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        .btn-copy {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            cursor: pointer;
+            transition: 0.3s;
+            text-align: left;
+            margin-top: 10px;
+            display: block;
+            width: 100%;
+        }
+
+        .btn-copy:hover {
+            background: var(--accent-glow);
+        }
+
+        /* Main Viewport */
+        #viewport {
+            flex-grow: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #screen-container {
+            width: 100%;
+            height: 100%;
+            max-width: 1200px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 20px 80px rgba(0,0,0,0.5);
+        }
+
+        #screen-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .meta {
+            font-size: 12px;
+            color: rgba(255,255,255,0.4);
+            display: flex;
+            gap: 20px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        h1 { font-size: 24px; margin: 0; font-weight: 600; letter-spacing: -0.5px; }
+        h2 { font-size: 14px; margin: 0; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
+
+        .overlay {
+            position: absolute;
+            top: 20px; right: 20px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 10px;
+            color: var(--accent);
+            border: 1px solid var(--accent-glow);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <div>
+            <h1>OpenClaw Bridge</h1>
+            <h2>Control Center</h2>
+        </div>
+
+        <div class="status-card">
+            <div id="status-text"><span class="status-dot pulse" style="color: var(--danger); background: var(--danger);"></span> Offline</div>
+            <div style="font-size: 12px; margin-top: 10px; color: rgba(255,255,255,0.3);">Bridge handles GUI & Hands on your Mac.</div>
+        </div>
+
+        <div class="status-card">
+            <h2>Bridge Token</h2>
+            <code id="token-val" style="display: block; padding: 10px; background: #000; border-radius: 4px; font-size: 12px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1);">7d9f2e3a...5e6d</code>
+            <button class="btn-copy" onclick="copyLaunchCmd()">Copy Launch Command</button>
+        </div>
+
+        <div class="status-card">
+            <h2>Model Costs</h2>
+            <div style="font-size: 14px; color: var(--safe); margin-top: 8px;">Bridge Logic: $0.00</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.4);">Automation runs locally. 0 tokens.</div>
+            <div style="font-size: 14px; color: var(--accent); margin-top: 8px;">Vision: ~0.01¢ / frame</div>
+            <div style="font-size: 11px; color: rgba(255,255,255,0.4);">Model only sees when it needs to "think".</div>
+        </div>
+
+        <div style="margin-top: auto; padding-top: 20px;">
+           <div class="meta">
+               <span>Tailscale IP: 100.124.207.71</span>
+           </div>
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div id="screen-container">
+            <img id="screen-img" src="" alt="Desktop Feed">
+        </div>
+        <div class="meta" id="stats">
+            <span>FPS: 1</span>
+            <span>Last Frame: Never</span>
+        </div>
+    </div>
+
+    <script>
+        const BRIDGE_URL = 'http://localhost:5555';
+        const TOKEN = '7d9f2e3a1c8b4a5f9e0d1c2b3a4f5e6d';
+        const img = document.getElementById('screen-img');
+        const statusText = document.getElementById('status-text');
+        const stats = document.getElementById('stats');
+
+        async function updateScreen() {
+            try {
+                const start = Date.now();
+                const resp = await fetch(`${BRIDGE_URL}/screenshot`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                
+                if (resp.ok) {
+                   const blob = await resp.blob();
+                   img.src = URL.createObjectURL(blob);
+                   statusText.innerHTML = '<span class="status-dot pulse" style="color: var(--safe); background: var(--safe);"></span> Active & Tethered';
+                   stats.innerHTML = `<span>Latency: ${Date.now() - start}ms</span> <span>Updated: ${new Date().toLocaleTimeString()}</span>`;
+                } else {
+                   throw new Error();
+                }
+            } catch (e) {
+                statusText.innerHTML = '<span class="status-dot pulse" style="color: var(--danger); background: var(--danger);"></span> Bridge Disconnected';
+            }
+            setTimeout(updateScreen, 1500);
+        }
+
+        function copyLaunchCmd() {
+            const cmd = `export BRIDGE_TOKEN="${TOKEN}" && node proxy/local-bridge.js`;
+            navigator.clipboard.writeText(cmd);
+            alert("Launch command copied to clipboard!");
+        }
+
+        updateScreen();
+    </script>
+</body>
+</html>

@@ -10,6 +10,10 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.22.1",
+    "express-http-proxy": "^2.1.2",
+    "playwright": "^1.58.2",
+    "robotjs": "^0.6.0",
+    "screenshot-desktop": "^1.15.3"
   }
 }

@@ -29,8 +29,14 @@ const { Client, GatewayIntentBits, Events } = require('discord.js');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const fs = require('fs');
+const path = require('path');
+
+const { routeAndExecute } = require('./task-router');
 
 const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
 if (!DISCORD_TOKEN) {
   console.error('DISCORD_BOT_TOKEN must be set in .env');
   process.exit(1);
@@ -58,21 +64,41 @@ const ALL_AGENTS = ['executive', 'architect', 'builder', 'ops', 'reviewer', 'mar
 // Track in-progress to avoid double-responding
 const processing = new Set();
 
+async function transcribeAudio(audioBuffer) {
+  const blob = new Blob([audioBuffer], { type: 'audio/ogg' });
+  const form = new FormData();
+  form.append('file', blob, 'voice.ogg');
+  form.append('model', 'whisper-1');
+  form.append('language', 'en');
+  form.append('response_format', 'text');
+  form.append('temperature', '0');
+
+  const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+    body: form
+  });
+  if (!resp.ok) throw new Error(`Whisper error: ${await resp.text()}`);
+  return (await resp.text()).trim();
+}
+
 async function callAgent(agent, message) {
-  const safeMsg = message.replace(/'/g, "'\\''").slice(0, 2000);
-  const cmd = `export PATH=$PATH:$(npm config get prefix)/bin && openclaw agent --agent ${agent} --message '${safeMsg}'`;
   try {
-    const { stdout } = await execAsync(cmd, { timeout: 60000, shell: '/bin/bash' });
-    const cleaned = (stdout || '').replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+    const result = await routeAndExecute(agent, message);
+    console.log(`[discord] Routed to ${result.target.toUpperCase()}`);
+    
+    // Clean escape codes and OpenClaw noise
+    const cleaned = (result.output || '').replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
     const lines = cleaned.split('\n').filter(l => {
       const t = l.trim();
-      return t.length > 0 && !t.startsWith('[') && !t.startsWith('Config') && !t.startsWith('│') && !t.startsWith('◇');
+      return t.length > 0 && !t.startsWith('[') && !t.startsWith('Config') && !t.startsWith('│') && !t.startsWith('◇') && !t.startsWith('🦞');
     });
-    return lines.join('\n').trim();
+    return lines.join('\n').trim() || "Done.";
   } catch (err) {
     return `[${agent}] Error: ${err.message.slice(0, 100)}`;
   }
 }
+
 
 function chunkMessage(text, maxLen = 1900) {
   const chunks = [];
@@ -108,11 +134,43 @@ client.on(Events.MessageCreate, async (message) => {
   if (processing.has(msgKey)) return;
   processing.add(msgKey);
 
-  const content = message.content.trim();
+  let content = message.content.trim();
+  
+  // Handle Attachments (Voice / Images)
+  if (message.attachments.size > 0) {
+    for (const attachment of message.attachments.values()) {
+      const isVoice = attachment.contentType?.includes('audio');
+      const isImage = attachment.contentType?.includes('image');
+      
+      try {
+        const resp = await fetch(attachment.url);
+        const buffer = Buffer.from(await resp.arrayBuffer());
+        
+        if (isVoice) {
+          console.log(`[discord] Transcribing voice note...`);
+          const transcript = await transcribeAudio(buffer);
+          if (transcript) {
+            // Updated: Summarize the command before executing
+            const targetAgent = CHANNEL_AGENT_MAP[channelId]; // Define targetAgent here
+            await message.reply(`🎙️ **Summarized Command:** "${transcript}"\n⏳ *Executing on ${targetAgent.toUpperCase()}...*`);
+            content = (content ? content + "\n" : "") + transcript;
+          }
+        } else if (isImage) {
+          const localPath = path.resolve(__dirname, '../workspace/incoming_discord.jpg');
+          fs.writeFileSync(localPath, buffer);
+          content = (content ? content + "\n" : "") + `[System: I have shared an image at incoming_discord.jpg. Please interpret it.]`;
+        }
+      } catch (err) {
+        console.error('[discord] Attachment error:', err.message);
+      }
+    }
+  }
+
   if (!content || content.length === 0) {
     processing.delete(msgKey);
     return;
   }
+
 
   const isEveryoneMention = content.includes('@everyone') || content.includes('@here');
   const agent = CHANNEL_AGENT_MAP[channelId];

@@ -20,6 +20,8 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 
+const { routeAndExecute } = require('./task-router');
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PROXY_URL = process.env.PROXY_URL || 'http://localhost:3001';
@@ -95,16 +97,25 @@ async function textToSpeech(text) {
 }
 
 async function callOpenClaw(message, agent = 'main') {
-  const safeMsg = message.replace(/'/g, "'\\''");
-  const cmd = `export PATH=$PATH:$(npm config get prefix)/bin && openclaw agent --agent ${agent} --message '${safeMsg}'`;
-  const { stdout } = await execAsync(cmd, { timeout: 60000, shell: '/bin/bash' });
-  // Strip ANSI color codes and extract meaningful output
-  const cleaned = (stdout || '').replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
-  const lines = cleaned.split('\n').filter(l => {
-    const t = l.trim();
-    return t.length > 0 && !t.startsWith('[') && !t.startsWith('Config') && !t.startsWith('│') && !t.startsWith('◇');
-  });
-  return lines.join('\n').trim() || 'Task acknowledged and in progress.';
+  try {
+    const result = await routeAndExecute(agent, message);
+    console.log(`[tg] Task routed to ${result.target.toUpperCase()}`);
+    // Strip ANSI codes
+    const cleaned = (result.output || '').replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+    const lines = cleaned.split('\n').filter(l => {
+      const t = l.trim();
+      return t.length > 0 && !t.startsWith('[') && !t.startsWith('Config') && !t.startsWith('│') && !t.startsWith('◇') && !t.startsWith('🦞');
+    });
+    return lines.join('\n').trim() || 'Task acknowledged and in progress.';
+  } catch (err) {
+    console.error('[tg] Route error:', err.message);
+    // Fallback: run on VPS only
+    const safeMsg = message.replace(/'/g, "'\\''");
+    const OPENCLAW_PATH = '/home/droid/.npm-global/bin/openclaw';
+    const cmd = `${OPENCLAW_PATH} agent --agent ${agent} --message '${safeMsg}'`;
+    const { stdout } = await execAsync(cmd, { timeout: 60000, shell: '/bin/bash', cwd: '/home/droid/openclaw-control' });
+    return (stdout || '').trim() || 'Task processed.';
+  }
 }
 
 async function sendText(chatId, text, replyTo) {
@@ -182,7 +193,6 @@ async function processTextMessage(msg) {
   console.log(`[tg] 💬 Text from chat ${chatId}: "${text.slice(0, 80)}"`);
 
   try {
-    // Show typing indicator by sending immediately
     const agentResponse = await callOpenClaw(text);
     console.log(`[tg] Agent replied (${agentResponse.length} chars)`);
     await sendText(chatId, agentResponse, msgId);
@@ -191,6 +201,62 @@ async function processTextMessage(msg) {
     await sendText(chatId, `❌ Error: ${err.message.slice(0, 200)}`, msgId);
   }
 }
+
+async function processPhotoMessage(msg) {
+  const chatId = msg.chat.id;
+  const msgId = msg.message_id;
+  const photo = msg.photo[msg.photo.length - 1]; // Get highest res
+  const caption = msg.caption || 'No caption';
+
+  console.log(`[tg] 🖼️ Photo from chat ${chatId}`);
+  try {
+    const fileUrl = await getFileUrl(photo.file_id);
+    const buffer = await downloadBuffer(fileUrl);
+    
+    // Save to workspace for OpenClaw to "see"
+    const fs = require('fs');
+    const path = require('path');
+    const localPath = path.resolve(__dirname, '../workspace/incoming_tg.jpg');
+    fs.writeFileSync(localPath, buffer);
+
+    await sendText(chatId, `🖼️ Analyzing image...`, msgId);
+
+    const prompt = `I have shared an image (incoming_tg.jpg). Please interpret it. Caption: ${caption}`;
+    const agentResponse = await callOpenClaw(prompt);
+    
+    await sendText(chatId, agentResponse);
+  } catch (err) {
+    console.error('[tg] Photo error:', err.message);
+    await sendText(chatId, `❌ Image Error: ${err.message.slice(0, 200)}`, msgId);
+  }
+}
+
+async function processDocumentMessage(msg) {
+  const chatId = msg.chat.id;
+  const msgId = msg.message_id;
+  const doc = msg.document;
+
+  console.log(`[tg] 📄 Document from chat ${chatId}: ${doc.file_name}`);
+  try {
+    const fileUrl = await getFileUrl(doc.file_id);
+    const buffer = await downloadBuffer(fileUrl);
+    
+    const fs = require('fs');
+    const path = require('path');
+    const localPath = path.resolve(__dirname, `../workspace/${doc.file_name}`);
+    fs.writeFileSync(localPath, buffer);
+
+    await sendText(chatId, `📄 File received: ${doc.file_name}. Analyzing...`, msgId);
+
+    const prompt = `I have shared a file named "${doc.file_name}". Please check it. Caption: ${msg.caption || ''}`;
+    const agentResponse = await callOpenClaw(prompt);
+    
+    await sendText(chatId, agentResponse);
+  } catch (err) {
+    console.error('[tg] Document error:', err.message);
+  }
+}
+
 
 async function poll() {
   console.log('[tg] Gateway active — handling ALL Telegram message types');
@@ -203,13 +269,15 @@ async function poll() {
       if (!msg) continue;
 
       if (msg.voice || msg.audio) {
-        // Runs async — does not block next message
         processVoiceMessage(msg).catch(err => console.error('[tg] Voice handler error:', err));
       } else if (msg.text) {
-        // Text messages — route to openclaw CLI
         processTextMessage(msg).catch(err => console.error('[tg] Text handler error:', err));
+      } else if (msg.photo) {
+        processPhotoMessage(msg).catch(err => console.error('[tg] Photo handler error:', err));
+      } else if (msg.document) {
+        processDocumentMessage(msg).catch(err => console.error('[tg] Doc handler error:', err));
       }
-      // All other types (stickers, photos, etc.) — silently ignore
+
     }
     if (updates.length === 0) await new Promise(r => setTimeout(r, 500));
   }

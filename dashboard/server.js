@@ -18,13 +18,39 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const HOST = process.env.DASHBOARD_HOST || '127.0.0.1';
+const HOST = process.env.DASHBOARD_HOST || '0.0.0.0';
 const PORT = process.env.DASHBOARD_PORT || 3001;
 
 // ── Org ──
 app.get('/api/org', async (req, res) => {
   const { data } = await supabase.from('organizations').select('*').limit(1).single();
-  res.json(data || {});
+  const org = data || { name: 'Mission Control', owner_identity: 'Peter Wachira' };
+  res.json({ ...org, name: 'Mission Control' }); // Enforce Mission Control naming
+});
+
+// ── Learned Skills (Vector Memory) ──
+app.get('/api/knowledge', async (req, res) => {
+  const { data } = await supabase.from('agent_knowledge_base')
+    .select('id, content, metadata, created_at')
+    .order('created_at', { ascending: false })
+    .limit(30);
+  res.json(data || []);
+});
+
+// ── Documentation ──
+app.get('/api/docs', async (req, res) => {
+  const fs = require('fs');
+  const docsDir = path.resolve(__dirname, '../workspace');
+  try {
+    const files = fs.readdirSync(docsDir).filter(f => f.endsWith('.md'));
+    const contents = files.map(f => ({
+      name: f,
+      content: fs.readFileSync(path.join(docsDir, f), 'utf8')
+    }));
+    res.json(contents);
+  } catch (e) {
+    res.json([]);
+  }
 });
 
 // ── Agents ──
@@ -129,17 +155,20 @@ app.get('/api/tasks', async (req, res) => {
   const offset = (page - 1) * limit;
   
   let query = supabase.from('task_state')
-    .select('*, bmad_agents!task_state_agent_id_fkey(name)')
+    .select('*, agent:bmad_agents!task_state_agent_id_fkey(name), assigned:bmad_agents!task_state_assigned_agent_id_fkey(name)')
     .order('last_activity', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
     
-  if (req.query.agent_id) query = query.eq('agent_id', req.query.agent_id);
+  if (req.query.agent_id) query = query.or(`agent_id.eq.${req.query.agent_id},assigned_agent_id.eq.${req.query.agent_id}`);
   if (req.query.status) query = query.eq('status', req.query.status);
   if (req.query.search) query = query.ilike('title', `%${req.query.search}%`);
 
   const { data } = await query;
-  res.json((data || []).map(t => ({ ...t, agent_name: t.bmad_agents?.name })));
+  res.json((data || []).map(t => ({ 
+    ...t, 
+    agent_name: t.assigned?.name || t.agent?.name || 'System' 
+  })));
 });
 
 app.patch('/api/tasks/:id/status', async (req, res) => {

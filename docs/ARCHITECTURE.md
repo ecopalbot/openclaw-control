@@ -8,30 +8,27 @@ OpenClaw handles: sessions, channels (Telegram/Discord/Slack), agent routing, sk
 
 BMAD adds: organization identity, agile task lifecycle, persistent memory, $ cost tracking, budget enforcement, VPS health monitoring, and a configuration dashboard.
 
-## Layers
+## Hybrid Architecture (The General & The Soldier)
 
-| Layer         | Owner            | Components                                                    |
-| ------------- | ---------------- | ------------------------------------------------------------- |
-| Runtime       | OpenClaw         | Gateway, sessions, channels, agent routing, tools             |
-| Orchestration | BMAD v6          | Task phases, agent roles, workflow files (SOUL.md, AGENTS.md) |
-| Memory        | Supabase         | agent_memory, task_state, token_usage                         |
-| Cost Control  | Proxy middleware | Two-tier: .env hard limits + Supabase adjustable limits       |
-| Monitoring    | Cron scripts     | system_metrics, cron_activity → Supabase                      |
-| Visualization | Dashboard        | BMAD views only (127.0.0.1, Tailscale)                        |
-| Engineering   | Antigravity      | Config generation in openclaw-control repo (local only)       |
+We run **Twin OpenClaw Installations** kept in sync via shared memory.
+
+1. **VPS (The General)**: 24/7 endpoint for Telegram/Discord. Classifies tasks.
+2. **Mac (The Soldier)**: Local worker with GUI, Vision, and physical hands. Executes GUI tasks.
+3. **Tailscale**: Secure tunnel between the twins.
+4. **Supabase**: Shared brain where both twins read/write state.
 
 ## Data Flow
 
-```
-User → Telegram/WebChat → OpenClaw Gateway → Agent Session
-                                    ↓
-                            BMAD Phase Routing
-                                    ↓
-                         LLM Call → Cost Middleware → Provider
-                                    ↓
-                            Supabase (token_usage, task_state, agent_memory)
-                                    ↓
-                            Dashboard reads Supabase
+```mermaid
+graph TD
+    User([User]) -- Telegram/Discord --> VPS[VPS General]
+    VPS -- "Is GUI Task?" --> Router{Task Router}
+    Router -- No --> LocalOC[VPS OpenClaw]
+    Router -- Yes --> MacBridge[Mac Bridge via Tailscale]
+    MacBridge -- Native --> MacOC[Mac OpenClaw]
+    LocalOC -- Log --> DB[(Supabase)]
+    MacOC -- Log --> DB
+    DB -- State --> Dash[Dashboard]
 ```
 
 ## Security
