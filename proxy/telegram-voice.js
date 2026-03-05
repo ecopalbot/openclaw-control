@@ -160,23 +160,27 @@ async function processVoiceMessage(msg) {
     }
 
     // 2. Echo transcript back so user knows what was heard
-    await sendText(chatId, `🎙️ You said:\n"${transcript}"\n\n⏳ Processing...`, msgId);
+    await sendText(chatId, `🎙️ You said:\n"${transcript}"\n\n✅ Acknowledged. Routing to agent. I will notify you when it's done.`, msgId);
 
-    // 3. Get openclaw response
-    const agentResponse = await callOpenClaw(transcript);
-    console.log(`[tg] Agent replied (${agentResponse.length} chars)`);
+    // 3. Get openclaw response in background
+    callOpenClaw(transcript).then(async (agentResponse) => {
+      console.log(`[tg] Agent replied (${agentResponse.length} chars)`);
 
-    // 4. Send text response
-    await sendText(chatId, agentResponse);
+      // 4. Send text response
+      await sendText(chatId, `🏁 Task Complete:\n\n${agentResponse}`);
 
-    // 5. Send voice response (TTS)
-    try {
-      const voiceBuffer = await textToSpeech(agentResponse);
-      await sendVoice(chatId, voiceBuffer, null);
-      console.log(`[tg] Voice response sent`);
-    } catch (ttsErr) {
-      console.warn('[tg] TTS failed (text was still sent):', ttsErr.message);
-    }
+      // 5. Send voice response (TTS)
+      try {
+        const voiceBuffer = await textToSpeech(agentResponse);
+        await sendVoice(chatId, voiceBuffer, null);
+        console.log(`[tg] Voice response sent`);
+      } catch (ttsErr) {
+        console.warn('[tg] TTS failed (text was still sent):', ttsErr.message);
+      }
+    }).catch(async (err) => {
+      console.error('[tg] Voice execution error:', err.message);
+      await sendText(chatId, `❌ Error processing task: ${err.message.slice(0, 200)}`);
+    });
 
   } catch (err) {
     console.error('[tg] Voice error:', err.message);
@@ -192,14 +196,17 @@ async function processTextMessage(msg) {
   if (!text) return;
   console.log(`[tg] 💬 Text from chat ${chatId}: "${text.slice(0, 80)}"`);
 
-  try {
-    const agentResponse = await callOpenClaw(text);
+  // Instant UX Feedback
+  await sendText(chatId, `✅ Message received. I am actively working on this task. I will notify you when it's done.`, msgId);
+
+  // Background Processing
+  callOpenClaw(text).then(async (agentResponse) => {
     console.log(`[tg] Agent replied (${agentResponse.length} chars)`);
-    await sendText(chatId, agentResponse, msgId);
-  } catch (err) {
+    await sendText(chatId, `🏁 Task Complete:\n\n${agentResponse}`, msgId);
+  }).catch(async (err) => {
     console.error('[tg] Text error:', err.message);
-    await sendText(chatId, `❌ Error: ${err.message.slice(0, 200)}`, msgId);
-  }
+    await sendText(chatId, `❌ Error processing task: ${err.message.slice(0, 200)}`, msgId);
+  });
 }
 
 async function processPhotoMessage(msg) {
@@ -247,11 +254,16 @@ async function processPhotoMessage(msg) {
 
     // If caption contains a command, route through OpenClaw with the vision context
     if (caption && caption.length > 5) {
+      await sendText(chatId, `🖼️ Image analyzed. Routing your request to agent...`, msgId);
       const enrichedPrompt = `Image analysis: ${analysis}\n\nUser request about this image: ${caption}`;
-      const agentResponse = await callOpenClaw(enrichedPrompt);
-      await sendText(chatId, agentResponse);
+      callOpenClaw(enrichedPrompt).then(async (agentResponse) => {
+        await sendText(chatId, `🏁 Task Complete:\n\n${agentResponse}`);
+      }).catch(async (err) => {
+        console.error('[tg] Photo execution error:', err.message);
+        await sendText(chatId, `❌ Error processing photo request: ${err.message.slice(0, 200)}`);
+      });
     } else {
-      await sendText(chatId, analysis);
+      await sendText(chatId, `🖼️ Image Analysis:\n\n${analysis}`);
     }
   } catch (err) {
     console.error('[tg] Photo error:', err.message);

@@ -61,6 +61,16 @@ The system is hardened with several layers:
 
 ---
 
+## 🤖 AUTONOMY & SELF-HEALING
+
+The system uses advanced, decentralized autonomy patterns to guarantee task completion and system stability without human intervention:
+
+1. **Native Skill Injection (`find-skills`, `tavily-search`):** If an agent lacks a capability (like analyzing a CSV or browsing the web optimally), it will dynamically query ClawHub, vet the skill for security, and install it on the Mac workspace.
+2. **Mac Task Resurrection:** The `local-bridge.js` implements a rigorous "Resurrection Loop." If an OpenClaw agent crashes or throws an unhandled exception, the bridge intercepts the crash log and revives the agent, explicitly instructing it to debug its own failure and try again (up to 3 times).
+3. **Ops Auto-Healer (`debug-pro`):** The VPS infrastructure is monitored by a continuous PM2 integration. If a service like the proxy crashes, the `ops` agent uses the 7-step `debug-pro` protocol to read PM2 logs, isolate the port/environmental cause, implement a fix, and verify stability.
+
+---
+
 ## 🎨 IMAGE PROCESSING & POSTER EDITING
 
 The system is now integrated with **Multi-Modal AI**:

@@ -156,24 +156,39 @@ app.post('/agent', (req, res) => {
         console.log(`[AGENT] 😴 caffeinate stopped — Mac can sleep again`);
     };
 
-    // Inject system directive so agent knows it's running natively on Mac
-    const localDirective = "[SYSTEM: You are running NATIVELY on this Mac. " +
+    const originalDirective = "[SYSTEM PRIORITY: NATIVE EXECUTION MODE ENABLED. You are running NATIVELY on this Mac. " +
         "You have full access to 'screencapture', 'open', 'robotjs' (mouse/typing), and 'playwright'. " +
         "Save all generated project files to ~/Documents/Projects/ecopalbot-projects/<project-name>/. " +
         "CRITICAL SELF-LEARNING RULE: Whenever you solve a problem, figure out a bug, or discover a new strategy, BEFORE completing the task you MUST send a POST request with the summary to http://100.92.21.72:3001/api/knowledge using application/json with fields 'content' and 'source' using `curl`. " +
         "Do NOT say you cannot interact; use your tools to perform the physical task.] ";
-    const safeMsg = (localDirective + message).replace(/'/g, "'\\''");
+        
+    let attempt = 0;
+    const maxAttempts = 3;
 
-    const cmd = `/opt/homebrew/bin/openclaw agent --agent ${agent} --local --message '${safeMsg}'`;
+    const executeTask = (currentMessage) => {
+        attempt++;
+        const safeMsg = (currentMessage).replace(/'/g, "'\\''");
+        const cmd = `/opt/homebrew/bin/openclaw agent --agent ${agent} --local --message '${safeMsg}'`;
 
-    exec(cmd, {
-        timeout:   180000,
-        maxBuffer: 1024 * 1024 * 5,
-        env:       { ...process.env, OPENCLAW_IGNORE_CONFIG_ERRORS: '1' }
-    }, (err, stdout, stderr) => {
-        cleanup();
-        res.json({ ok: !err, stdout, stderr, error: err ? err.message : null });
-    });
+        console.log(`[AGENT] Attempt ${attempt}/${maxAttempts}...`);
+
+        exec(cmd, {
+            timeout:   300000, 
+            maxBuffer: 1024 * 1024 * 5,
+            env:       { ...process.env, OPENCLAW_IGNORE_CONFIG_ERRORS: '1' }
+        }, (err, stdout, stderr) => {
+            if (err && attempt < maxAttempts) {
+                console.log(`[AGENT] Task failed on attempt ${attempt}. Resurrecting...`);
+                const resurrectionMsg = `${originalDirective}\nYour previous execution failed with error:\n${(stderr || err.message).slice(0, 1000)}\n\nPlease analyze this error, fix it, and complete the original objective:\n${message}`;
+                return executeTask(resurrectionMsg);
+            }
+            
+            cleanup();
+            res.json({ ok: !err, stdout, stderr, error: err ? err.message : null });
+        });
+    };
+
+    executeTask(originalDirective + message);
 });
 
 
