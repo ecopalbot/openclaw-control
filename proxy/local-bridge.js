@@ -159,6 +159,7 @@ app.post('/agent', (req, res) => {
     const originalDirective = "[SYSTEM PRIORITY: NATIVE EXECUTION MODE ENABLED. You are running NATIVELY on this Mac. " +
         "You have full access to 'screencapture', 'open', 'robotjs' (mouse/typing), and 'playwright'. " +
         "Save all generated project files to ~/Documents/Projects/ecopalbot-projects/<project-name>/. " +
+        "CRITICAL AUTONOMY RULE: NEVER simply apologize and stop if a command fails (e.g., command not found). If you hit a roadblock, you MUST use your bash tools to find a workaround, mock the output, or try an alternative directory before completing the turn. DO NOT GIVE UP. " +
         "CRITICAL SELF-LEARNING RULE: Whenever you solve a problem, figure out a bug, or discover a new strategy, BEFORE completing the task you MUST send a POST request with the summary to http://100.92.21.72:3001/api/knowledge using application/json with fields 'content' and 'source' using `curl`. " +
         "Do NOT say you cannot interact; use your tools to perform the physical task.] ";
         
