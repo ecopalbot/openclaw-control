@@ -206,25 +206,53 @@ async function processPhotoMessage(msg) {
   const chatId = msg.chat.id;
   const msgId = msg.message_id;
   const photo = msg.photo[msg.photo.length - 1]; // Get highest res
-  const caption = msg.caption || 'No caption';
+  const caption = msg.caption || '';
 
   console.log(`[tg] 🖼️ Photo from chat ${chatId}`);
   try {
     const fileUrl = await getFileUrl(photo.file_id);
     const buffer = await downloadBuffer(fileUrl);
-    
-    // Save to workspace for OpenClaw to "see"
-    const fs = require('fs');
-    const path = require('path');
-    const localPath = path.resolve(__dirname, '../workspace/incoming_tg.jpg');
-    fs.writeFileSync(localPath, buffer);
+    const base64 = buffer.toString('base64');
+    const mimeType = 'image/jpeg';
 
     await sendText(chatId, `🖼️ Analyzing image...`, msgId);
 
-    const prompt = `I have shared an image (incoming_tg.jpg). Please interpret it. Caption: ${caption}`;
-    const agentResponse = await callOpenClaw(prompt);
-    
-    await sendText(chatId, agentResponse);
+    // Use OpenAI Vision API directly
+    const visionResp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: caption ? `Analyze this image. Context: ${caption}` : 'Analyze this image in detail. Describe what you see.' },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'auto' } }
+          ]
+        }]
+      })
+    });
+
+    if (!visionResp.ok) {
+      const errBody = await visionResp.text();
+      throw new Error(`Vision API ${visionResp.status}: ${errBody.slice(0, 200)}`);
+    }
+
+    const visionData = await visionResp.json();
+    const analysis = visionData.choices?.[0]?.message?.content || 'Could not analyze image.';
+
+    // If caption contains a command, route through OpenClaw with the vision context
+    if (caption && caption.length > 5) {
+      const enrichedPrompt = `Image analysis: ${analysis}\n\nUser request about this image: ${caption}`;
+      const agentResponse = await callOpenClaw(enrichedPrompt);
+      await sendText(chatId, agentResponse);
+    } else {
+      await sendText(chatId, analysis);
+    }
   } catch (err) {
     console.error('[tg] Photo error:', err.message);
     await sendText(chatId, `❌ Image Error: ${err.message.slice(0, 200)}`, msgId);

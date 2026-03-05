@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BMAD — Multi-Agent Organization</title>
+  <title>Mission Control — Peter AI</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
+    :root { margin:0; padding:0; box-sizing:border-box; }
     :root {
       --bg: #05070a; --surface: #0c111d; --border: #1e293b;
       --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8;
@@ -102,6 +104,7 @@
     <a onclick="showPage('cost')">💰 Decision Bank</a>
     <div class="section">System</div>
     <a onclick="showPage('system')">🖥 VPS Health</a>
+    <a onclick="showPage('cron')">⏰ Cron Jobs</a>
     <a onclick="showPage('settings')">⚙ Settings</a>
   </nav>
   <main>
@@ -133,6 +136,64 @@
         </div>
       </div>
       <div class="panel"><h2>Recent Commands & Tasks</h2><div id="recent-tasks"><em style="color:var(--muted);font-size:12px">No recent tasks</em></div></div>
+      
+      <!-- ORGANOGRAM -->
+      <div class="panel" style="margin-top:16px;">
+        <h2>🏢 Organization Structure</h2>
+        <div id="org-chart" style="display:flex; flex-direction:column; align-items:center; gap:12px; padding:20px 0;">
+          <!-- Executive (Peter's proxy) -->
+          <div style="background:linear-gradient(135deg, #7c3aed, #4f46e5); border-radius:12px; padding:12px 24px; text-align:center; min-width:180px;">
+            <div style="font-weight:700; font-size:14px;">👑 Executive</div>
+            <div style="font-size:10px; color:rgba(255,255,255,0.7);">Strategic Controller</div>
+          </div>
+          <div style="width:2px; height:16px; background:var(--border);"></div>
+          <!-- Main (Orchestrator) -->
+          <div style="background:linear-gradient(135deg, #0ea5e9, #2563eb); border-radius:12px; padding:12px 24px; text-align:center; min-width:180px;">
+            <div style="font-weight:700; font-size:14px;">🎯 Main</div>
+            <div style="font-size:10px; color:rgba(255,255,255,0.7);">Orchestrator + Mac Executor</div>
+          </div>
+          <div style="width:2px; height:16px; background:var(--border);"></div>
+          <!-- Specialist Teams -->
+          <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; max-width:900px;">
+            <div style="background:var(--surface); border:1px solid #f472b6; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#f472b6;">🎨 Anna</div>
+              <div style="font-size:9px; color:var(--muted);">UX Research</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #a78bfa; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#a78bfa;">🏗 Architect</div>
+              <div style="font-size:9px; color:var(--muted);">System Design</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #34d399; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#34d399;">⚒ Builder</div>
+              <div style="font-size:9px; color:var(--muted);">Full-Stack Dev</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #fbbf24; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#fbbf24;">🛡 Donna</div>
+              <div style="font-size:9px; color:var(--muted);">Governance</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #60a5fa; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#60a5fa;">📋 Kofi</div>
+              <div style="font-size:9px; color:var(--muted);">Product Mgr</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #4ade80; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#4ade80;">📢 Marketing</div>
+              <div style="font-size:9px; color:var(--muted);">Growth & Copy</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #38bdf8; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#38bdf8;">🔧 Ops</div>
+              <div style="font-size:9px; color:var(--muted);">DevOps & Infra</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #c084fc; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#c084fc;">🔬 Research</div>
+              <div style="font-size:9px; color:var(--muted);">Market Intel</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid #fb923c; border-radius:10px; padding:10px 16px; text-align:center; min-width:100px;">
+              <div style="font-weight:600; font-size:12px; color:#fb923c;">🔍 Reviewer</div>
+              <div style="font-size:9px; color:var(--muted);">QA & Security</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- LEARNED SKILLS (Vector Memory) -->
@@ -144,6 +205,14 @@
         <table>
           <thead><tr><th>Created</th><th>Memory Instance</th><th>Source</th></tr></thead>
           <tbody id="knowledge-tbody"></tbody>
+        </table>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <h2>🛠 Installed Skills (per Agent)</h2>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:15px;">Skills installed in agent workspace directories.</p>
+        <table>
+          <thead><tr><th>Skill</th><th>Agent</th><th>Status</th></tr></thead>
+          <tbody id="skills-tbody"></tbody>
         </table>
       </div>
     </div>
@@ -165,7 +234,7 @@
     <!-- AGENTS -->
     <div id="page-agents" class="hidden">
       <h1>🤖 Organization Agents</h1>
-      <div class="subtitle">10-agent autonomous organization mapped to OpenClaw workspaces</div>
+      <div class="subtitle">11-agent autonomous organization mapped to OpenClaw workspaces</div>
       <table>
         <thead><tr><th>Name</th><th>Role</th><th>OpenClaw ID</th><th>Efficiency</th><th>Done/Fail</th><th>Esc.</th><th>Status</th></tr></thead>
         <tbody id="agents-tbody"></tbody>
@@ -236,6 +305,15 @@
       <h1>💰 Cost & Decision Analytics</h1>
       <div class="subtitle">Predictive cost engine, token usage, and automated decision logs</div>
       
+      <div class="panel" style="display:flex; gap:10px; align-items:center; margin-bottom:16px; background:var(--surface); padding:10px; border-radius:8px;">
+        <span style="font-size:12px; color:var(--muted)">Range:</span>
+        <button class="btn-sm" onclick="setCostRange(3)">3 Days</button>
+        <button class="btn-sm" onclick="setCostRange(7)">7 Days</button>
+        <button class="btn-sm" onclick="setCostRange(10)">10 Days</button>
+        <input type="date" id="cost-start" style="background:var(--bg); border:1px solid var(--border); color:white; padding:2px 5px; font-size:11px;">
+        <button class="btn-sm" onclick="loadCosts()">Apply</button>
+      </div>
+
       <div class="panel" style="background:rgba(59,130,246,0.03); border-color:rgba(59,130,246,0.2);">
         <h2>🔥 Predictive Burn Rate</h2>
         <div class="cards" style="margin-top:10px; margin-bottom:0;">
@@ -272,6 +350,26 @@
       </div>
     </div>
 
+    <!-- CRON JOBS -->
+    <div id="page-cron" class="hidden">
+      <h1>⏰ Scheduled Jobs & Services</h1>
+      <div class="subtitle">Cron jobs and PM2 managed services</div>
+      <div class="panel">
+        <h2>PM2 Services</h2>
+        <table>
+          <thead><tr><th>Name</th><th>Status</th><th>PID</th><th>Restarts</th><th>Memory</th><th>CPU</th></tr></thead>
+          <tbody id="pm2-tbody"></tbody>
+        </table>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <h2>System Cron Jobs</h2>
+        <table>
+          <thead><tr><th>Schedule</th><th>Command</th><th>Status</th></tr></thead>
+          <tbody id="cron-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- SETTINGS -->
     <div id="page-settings" class="hidden">
       <h1>⚙ Settings</h1>
@@ -286,9 +384,17 @@
 
 <script>
 const API = window.location.origin + '/api';
+const socket = io();
 let FX_RATE = 129.50;
 let currentRoom = null;
 let taskPage = 1;
+let costDays = 1;
+
+socket.on('task_update', (task) => {
+  console.log('Real-time task update:', task);
+  // Re-load the current view if it's the task list or overview
+  loadTasks();
+});
 
 function toKES(usd) { return (parseFloat(usd) * FX_RATE).toFixed(2); }
 function autonomyBadge(level) {
@@ -475,29 +581,10 @@ async function loadData() {
         });
       }
       
-      // Build Organogram
-      const main = agents.find(a => a.name.toLowerCase() === 'main' || a.role === 'executive') || {name:'Main', role:'Orchestrator'};
-      const subs = agents.filter(a => a.name.toLowerCase() !== 'main' && a.role !== 'executive');
-      
-      const buildNode = (a) => `<div class="org-node"><div class="name">${a.name}</div><div class="role">${roleBadge(a.role)}</div></div>`;
-      
-      document.getElementById('org-tree-render').innerHTML = `
-        ${buildNode(main)}
-        <div class="org-children">
-          <div class="org-group"><div class="org-group-title">Strategy & Intelligence</div>
-            ${subs.filter(a => ['product','research','governance'].includes(a.role)).map(buildNode).join('') || '—'}
-          </div>
-          <div class="org-group"><div class="org-group-title">Engineering</div>
-            ${subs.filter(a => ['architect','developer','devops','qa'].includes(a.role)).map(buildNode).join('') || '—'}
-          </div>
-          <div class="org-group"><div class="org-group-title">Growth & Operations</div>
-            ${subs.filter(a => !['product','research','governance','architect','developer','devops','qa'].includes(a.role)).map(buildNode).join('') || '—'}
-          </div>
-        </div>
-      `;
     }
 
     // Rooms
+
     try {
       const roomRes = await fetch(API+'/rooms');
       if (roomRes.ok) {
@@ -603,11 +690,22 @@ async function loadData() {
       if (dRes.ok) {
         const docs = await dRes.json();
         const docsList = document.getElementById('docs-list');
-        docsList.innerHTML = docs.map(d => `
-          <div onclick="document.getElementById('doc-viewer').textContent = ${JSON.stringify(d.content)}" style="padding:10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:12px; color:var(--muted);">
-            📘 ${d.name}
-          </div>
-        `).join('');
+        docsList.innerHTML = ''; // clear
+        window.projectDocs = docs; // safely store reference
+
+        docs.forEach((d, idx) => {
+          const div = document.createElement('div');
+          div.style = "padding:10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:12px; color:var(--muted);";
+          div.textContent = `📘 ${d.name}`;
+          div.onclick = () => {
+             const html = marked.parse(window.projectDocs[idx].content || '');
+             document.getElementById('doc-viewer').innerHTML = `<div class="md-content">${html}</div>`;
+             // Highlight selected
+             Array.from(docsList.children).forEach(c => c.style.color = 'var(--muted)');
+             div.style.color = 'var(--accent)';
+          };
+          docsList.appendChild(div);
+        });
       }
     } catch(e) {}
 
@@ -660,6 +758,51 @@ async function loadData() {
         document.getElementById('sys-disk').textContent = sys.disk || '—';
       }
     } catch(e) {}
+    // Cron Jobs & PM2 services
+    try {
+      const cronRes = await fetch(API+'/cron');
+      if (cronRes.ok) {
+        const jobs = await cronRes.json();
+        const pm2Jobs = jobs.filter(j => j.type === 'pm2');
+        const cronJobs = jobs.filter(j => j.type === 'cron');
+        
+        const pm2body = document.getElementById('pm2-tbody');
+        pm2body.innerHTML = pm2Jobs.map(j => {
+          const statusColor = j.status === 'online' ? 'var(--green)' : 'var(--red)';
+          const memMB = (j.memory / (1024*1024)).toFixed(1);
+          return `<tr>
+            <td><strong>${j.name}</strong></td>
+            <td><span style="color:${statusColor};font-weight:600">${j.status}</span></td>
+            <td>${j.pid || '—'}</td>
+            <td>${j.restarts}</td>
+            <td>${memMB} MB</td>
+            <td>${j.cpu}%</td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="6" style="color:var(--muted);text-align:center">No PM2 services</td></tr>';
+        
+        const cronBody = document.getElementById('cron-tbody');
+        cronBody.innerHTML = cronJobs.map(j => `<tr>
+          <td><code style="font-size:11px">${j.schedule}</code></td>
+          <td style="font-size:11px;max-width:400px;overflow:hidden;text-overflow:ellipsis">${j.command}</td>
+          <td><span class="badge badge-green">${j.status}</span></td>
+        </tr>`).join('') || '<tr><td colspan="3" style="color:var(--muted);text-align:center">No cron jobs configured</td></tr>';
+      }
+    } catch(e) {}
+
+    // Installed Skills (per agent)
+    try {
+      const skillsRes = await fetch(API+'/skills');
+      if (skillsRes.ok) {
+        const skills = await skillsRes.json();
+        const tbody = document.getElementById('skills-tbody');
+        tbody.innerHTML = skills.map(s => `<tr>
+          <td><strong>${s.name}</strong></td>
+          <td><span class="badge badge-blue">${s.agent}</span></td>
+          <td><span class="badge badge-green">installed</span></td>
+        </tr>`).join('') || '<tr><td colspan="3" style="color:var(--muted);text-align:center">No skills installed</td></tr>';
+      }
+    } catch(e) {}
+
   } catch (e) { console.error('Load error:', e); }
 }
 

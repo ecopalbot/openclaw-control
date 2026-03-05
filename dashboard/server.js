@@ -6,11 +6,19 @@
  */
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const express = require('express');
+const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*' }
+});
 app.use(express.json());
+app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const supabase = createClient(
@@ -35,6 +43,20 @@ app.get('/api/knowledge', async (req, res) => {
     .order('created_at', { ascending: false })
     .limit(30);
   res.json(data || []);
+});
+
+app.post('/api/knowledge', async (req, res) => {
+  const { content, source } = req.body;
+  if (!content) return res.status(400).json({ error: 'Content required' });
+  const { data: org } = await supabase.from('organizations').select('id').limit(1).single();
+  const { data, error } = await supabase.from('agent_knowledge_base').insert({
+    organization_id: org?.id,
+    content,
+    metadata: { source: source || 'self-learning' }
+  }).select().single();
+  
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
 });
 
 // ── Documentation ──
@@ -242,14 +264,16 @@ app.post('/api/tasks', async (req, res) => {
   }
 
   const { data, error } = await supabase.from('task_state').insert({
+    ...req.body,
     organization_id: org?.id,
-    title,
     agent_id: agentIdUuid,
-    kanban_column: kanban_column || 'backlog',
-    status: 'in_progress',
-    checkpoint: { description: description || '' }
+    kanban_column: req.body.kanban_column || 'pending',
+    status: req.body.status || 'pending',
+    last_activity: new Date().toISOString()
   }).select().single();
+  
   if (error) return res.status(400).json({ error: error.message });
+  if (data) io.emit('task_update', data);
   res.json(data);
 });
 
@@ -349,18 +373,64 @@ app.post('/api/rooms/:id/messages', async (req, res) => {
   }
 });
 
-// ── Skills Registry ──
+// ── Skills Registry (scans all agent workspaces) ──
 app.get('/api/skills', async (req, res) => {
   const fs = require('fs');
-  const skillsDir = '/home/droid/.openclaw/workspace/skills';
+  const ocDir = '/home/droid/.openclaw';
+  const allSkills = [];
   try {
-    const skills = fs.readdirSync(skillsDir).filter(f => fs.statSync(`${skillsDir}/${f}`).isDirectory());
-    res.json(skills.map(s => ({ name: s, installed: true })));
-  } catch (e) {
-    res.json([]);
-  }
+    const dirs = fs.readdirSync(ocDir).filter(d => d.startsWith('workspace-'));
+    for (const wdir of dirs) {
+      const agentId = wdir.replace('workspace-', '');
+      const skillsPath = `${ocDir}/${wdir}/skills`;
+      try {
+        const skills = fs.readdirSync(skillsPath).filter(f => fs.statSync(`${skillsPath}/${f}`).isDirectory());
+        for (const s of skills) {
+          allSkills.push({ name: s, agent: agentId, installed: true });
+        }
+      } catch (e) { /* no skills dir for this agent */ }
+    }
+  } catch (e) { /* no openclaw dir */ }
+  res.json(allSkills);
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`BMAD Dashboard v3 listening on http://${HOST}:${PORT}`);
+// ── Cron Jobs ──
+app.get('/api/cron', async (req, res) => {
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+  const jobs = [];
+  try {
+    // System crontab
+    const { stdout: crontab } = await execAsync('crontab -l 2>/dev/null || echo ""');
+    const cronLines = crontab.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+    for (const line of cronLines) {
+      const parts = line.trim().split(/\s+/);
+      const schedule = parts.slice(0, 5).join(' ');
+      const command = parts.slice(5).join(' ');
+      jobs.push({ type: 'cron', schedule, command, status: 'scheduled' });
+    }
+    // PM2 processes as services
+    const { stdout: pm2 } = await execAsync('/home/droid/.npm-global/bin/pm2 jlist 2>/dev/null || echo "[]"');
+    const pm2List = JSON.parse(pm2);
+    for (const p of pm2List) {
+      jobs.push({
+        type: 'pm2',
+        name: p.name,
+        status: p.pm2_env?.status || 'unknown',
+        pid: p.pid,
+        uptime: p.pm2_env?.pm_uptime,
+        restarts: p.pm2_env?.restart_time || 0,
+        memory: p.monit?.memory || 0,
+        cpu: p.monit?.cpu || 0
+      });
+    }
+  } catch (e) {
+    console.error('Cron list error:', e.message);
+  }
+  res.json(jobs);
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`BMAD Dashboard v3 with WebSockets listening on http://${HOST}:${PORT}`);
 });

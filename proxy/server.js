@@ -61,8 +61,8 @@ const OPENAI_API_URL = 'https://api.openai.com/v1';
 
 app.post('/v1/chat/completions', async (req, res) => {
   try {
-    const { messages } = req.body;
-    let model = req.body.model;
+    let model = req.body.model || 'openai/gpt-4o';
+    const messages = req.body.messages || [];
     
     // 1. Extract Agent details from System Prompt
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
@@ -77,6 +77,16 @@ app.post('/v1/chat/completions', async (req, res) => {
     
     const budget = await checkBudget({ orgId: null, agentId, taskId: null });
     const pct = budget.pct || 0;
+
+    // Log every request to Decision Log so user can monitor traffic on dashboard
+    if (agentName !== 'system') {
+      logDecision({ 
+         agentId, 
+         action: 'session_spawn', 
+         reason: `Executed LLM turn`, 
+         details: { model }
+      }).catch(console.error);
+    }
 
     const isParticipationCheck = messages.some(m => typeof m.content === 'string' && m.content.includes('"participate":'));
     
@@ -138,7 +148,7 @@ app.post('/v1/chat/completions', async (req, res) => {
           // Zero-token participation approval for direct mentions/semantic domains
           logDecision({
             agentId,
-            action: 'mention_bypass',
+            action: 'session_spawn',
             reason: `Direct mention or domain match for ${agentName}`,
             details: { trigger: lastUserMsg.substring(0, 50) + '...' }
           }).catch(console.error);
@@ -191,7 +201,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     // 4. Forward to OpenAI, Kimi, or Grok
     let targetUrl = `${OPENAI_API_URL}/chat/completions`;
-    let authHeader = req.headers['authorization'] || `Bearer ${process.env.OPENAI_API_KEY}`;
+    let authHeader = `Bearer ${process.env.OPENAI_API_KEY}`;
 
     if (model && model.includes('moonshot')) {
       targetUrl = `${process.env.KIMI_BASE_URL || 'https://api.moonshot.cn/v1'}/chat/completions`;
@@ -203,6 +213,10 @@ app.post('/v1/chat/completions', async (req, res) => {
       targetUrl = 'https://openrouter.ai/api/v1/chat/completions';
       authHeader = `Bearer ${process.env.OPENROUTER_API_KEY || 'no_key'}`;
       req.body.model = model.replace('openrouter/', '');
+      model = req.body.model;
+    } else if (model && model.startsWith('openai/')) {
+      // Strip the provider prefix for native OpenAI
+      req.body.model = model.replace('openai/', '');
       model = req.body.model;
     }
     
@@ -279,6 +293,6 @@ app.post('/v1/chat/completions', async (req, res) => {
 });
 
 const PORT = 4000;
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`BMAD Proxy Server intercepting on http://127.0.0.1:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`BMAD Proxy Server intercepting on http://0.0.0.0:${PORT}`);
 });

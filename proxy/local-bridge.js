@@ -1,3 +1,4 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const express = require('express');
 const { exec } = require('child_process');
 const robot = require('robotjs');
@@ -10,12 +11,14 @@ app.use(express.json());
 // CONFIGURATION
 const PORT = 5555;
 const TOKEN = process.env.BRIDGE_TOKEN || 'change-me-safely';
-const ALLOWED_DIR = path.join(process.env.HOME, '.openclaw', 'workspace');
+const ALLOWED_DIR = path.join(process.env.HOME, '.openclaw');
+const PROJECTS_DIR = path.join(process.env.HOME, 'Documents', 'Projects', 'ecopalbot-projects');
 
 // SECURITY: Command Allowlist & Sanitization
 const FORBIDDEN_PATTERNS = [';', '&&', '||', '>', '<', '|', '..', 'sudo', 'chmod', 'rm -rf /'];
 
 if (!fs.existsSync(ALLOWED_DIR)) fs.mkdirSync(ALLOWED_DIR, { recursive: true });
+if (!fs.existsSync(PROJECTS_DIR)) fs.mkdirSync(PROJECTS_DIR, { recursive: true });
 
 app.use((req, res, next) => {
     const auth = req.headers.authorization;
@@ -135,24 +138,40 @@ app.get('/fs/read/:filename', (req, res) => {
 
 /**
  * 6. AGENT EXECUTION (Local OpenClaw Brain)
+ * Prevents Mac sleep for the duration of the task via caffeinate.
  */
 app.post('/agent', (req, res) => {
     const { message, agent = 'main' } = req.body;
     if (!message) return res.status(400).send('Message required');
 
-    console.log(`[AGENT] Routing to local brain: "${message.substring(0, 50)}..."`);
+    console.log(`[AGENT] 🚀 Starting task on Mac (agent: ${agent}): "${message.substring(0, 60)}..."`);
 
-    // Inject a local control directive to force interaction awareness
-    const localDirective = "[SYSTEM: You are running NATIVELY on this Mac. You have full access to 'screencapture', 'open', 'robotjs' (mouse/typing), and 'playwright'. Do NOT say you cannot interact; use your tools to perform the physical task.] ";
+    // ── Prevent Mac from sleeping during task ──
+    const { spawn } = require('child_process');
+    const caffeinate = spawn('caffeinate', ['-dim'], { detached: false });
+    console.log(`[AGENT] ☕ caffeinate started (pid ${caffeinate.pid}) — Mac will stay awake`);
+
+    const cleanup = () => {
+        try { caffeinate.kill(); } catch (_) {}
+        console.log(`[AGENT] 😴 caffeinate stopped — Mac can sleep again`);
+    };
+
+    // Inject system directive so agent knows it's running natively on Mac
+    const localDirective = "[SYSTEM: You are running NATIVELY on this Mac. " +
+        "You have full access to 'screencapture', 'open', 'robotjs' (mouse/typing), and 'playwright'. " +
+        "Save all generated project files to ~/Documents/Projects/ecopalbot-projects/<project-name>/. " +
+        "CRITICAL SELF-LEARNING RULE: Whenever you solve a problem, figure out a bug, or discover a new strategy, BEFORE completing the task you MUST send a POST request with the summary to http://100.92.21.72:3001/api/knowledge using application/json with fields 'content' and 'source' using `curl`. " +
+        "Do NOT say you cannot interact; use your tools to perform the physical task.] ";
     const safeMsg = (localDirective + message).replace(/'/g, "'\\''");
-    
+
     const cmd = `/opt/homebrew/bin/openclaw agent --agent ${agent} --local --message '${safeMsg}'`;
-    
-    exec(cmd, { 
-        timeout: 120000, 
+
+    exec(cmd, {
+        timeout:   180000,
         maxBuffer: 1024 * 1024 * 5,
-        env: { ...process.env, OPENCLAW_IGNORE_CONFIG_ERRORS: '1' } 
+        env:       { ...process.env, OPENCLAW_IGNORE_CONFIG_ERRORS: '1' }
     }, (err, stdout, stderr) => {
+        cleanup();
         res.json({ ok: !err, stdout, stderr, error: err ? err.message : null });
     });
 });

@@ -1,126 +1,204 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- * Task Router — Hybrid Architecture
+ * Task Router — Mac-First Hybrid Architecture
  *
- * Decides whether a task requires the Mac's GUI or can run on
- * the VPS, then routes to the correct OpenClaw installation.
+ * Primary:  Mac (full browser, GUI, better specs, native git)
+ * Fallback: VPS (headless, when Mac is offline/asleep)
  *
- * VPS (Ears/Brain) → Task Router → Mac (Hands/Eyes)
- *                                → VPS (Text-only tasks)
+ * After completion: project files are committed and pushed to
+ * GitHub under GITHUB_PROJECTS_OWNER/ecobot-{project-slug}
+ *
+ * VPS (Ears/Listen) → Task Router → Mac Bridge (Execute)
+ *                                  → VPS fallback (offline)
+ *                                       ↓
+ *                              GitHub auto-push
  * ═══════════════════════════════════════════════════════════════
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
+const { execSync, exec } = require('child_process');
 const { expandInstruction } = require('./semantic');
+const { createClient } = require('@supabase/supabase-js');
 
-const MAC_TAILSCALE_IP = process.env.MAC_TAILSCALE_IP || '100.124.207.71';
-const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN;
-const OPENCLAW_BIN = '/home/droid/.npm-global/bin/openclaw';
+// ── Configuration ────────────────────────────────────────────────
+const MAC_TAILSCALE_IP        = process.env.MAC_TAILSCALE_IP      || '100.124.207.71';
+const BRIDGE_TOKEN            = process.env.BRIDGE_TOKEN;
+const OPENCLAW_BIN            = '/home/droid/.npm-global/bin/openclaw';
+const GITHUB_PROJECTS_OWNER   = process.env.GITHUB_PROJECTS_OWNER || 'peter-wachira';
+const PROJECTS_DIR            = '/Users/mac/Documents/Projects/ecopalbot-projects';
 
-// Keywords that indicate a task needs the Mac's GUI
-const GUI_KEYWORDS = [
-  'screenshot', 'screen', 'capture', 'open app', 'open application',
-  'android studio', 'vscode', 'visual studio', 'xcode',
-  'browser', 'chrome', 'safari', 'firefox', 'opera',
-  'click', 'type', 'mouse', 'keyboard', 'gui',
-  'poster', 'design', 'image', 'edit photo', 'edit image',
-  'discord', 'telegram app', 'slack app', 'zoom',
-  'desktop', 'window', 'finder', 'dock', 'macbook',
-  'what is on my screen', 'what do you see', 'look at',
-  'describe my screen', 'show me', 'watch',
-  'android', 'ios', 'simulator', 'emulator', 'phone',
-  'inspect', 'visually', 'visual', 'ui', 'ux',
-  'documents', 'downloads', 'projects', 'terminal',
-  'login', 'sign in', 'navigate to', '.com', '.io', '.net', 'http'
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+// ── Task Classification ──────────────────────────────────────────
+//   Default: Mac. Explicit "--mode vps" or "use text" → VPS.
+const FORCE_VPS_KEYWORDS = [
+  '--mode vps', '--mode text', 'use text', 'using text', 'run on vps'
 ];
 
-const VPS_KEYWORDS = [
-  'research', 'search', 'find info', 'summarize', 'read the news',
-  'email', 'draft', 'write', 'compose', 'blog',
-  'analyze', 'calculate', 'compare', 'math',
-  'status', 'report', 'brief', 'briefing',
-  'task list', 'standup', 'checklist', 'plan',
-  'architecture', 'governance', 'policy'
-];
-
-/**
- * Classify whether a message needs Mac GUI or can run on VPS.
- * @param {string} message - The user's message
- * @returns {'mac' | 'vps'} - Target execution environment
- */
 function classifyTask(message) {
   const lower = message.toLowerCase();
-  
-  // Check for explicit GUI keywords
-  for (const keyword of GUI_KEYWORDS) {
-    if (lower.includes(keyword)) {
-      return 'mac';
-    }
+  for (const kw of FORCE_VPS_KEYWORDS) {
+    if (lower.includes(kw)) return 'vps';
   }
-  
-  // Check for VPS-only keywords
-  for (const keyword of VPS_KEYWORDS) {
-    if (lower.includes(keyword)) {
-      return 'vps';
-    }
-  }
-  
-  // Default: run on VPS (cheaper, no GUI overhead)
-  return 'vps';
+  return 'mac'; // Always prefer Mac
 }
 
+// ── Utilities ────────────────────────────────────────────────────
 /**
- * Detect filenames in a message and sync them from VPS to Mac workspace.
- * @param {string} message 
+ * Turn a task message into a safe git repo / folder slug.
+ * e.g. "Build a weather widget app" → "build-a-weather-widget-app"
  */
-async function syncFilesToMac(message) {
-  // Regex to find things like "incoming_tg.jpg" or "project.js"
-  const matches = message.match(/[a-zA-Z0-9_\-]+\.(jpg|png|pdf|txt|md|js|py|json|ogg|mp3)/g) || [];
-  const WSPACE = path.resolve(__dirname, '../workspace');
+function slugify(message) {
+  return message
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 6)
+    .join('-')
+    .replace(/-+/g, '-');
+}
 
-  for (const filename of matches) {
-    const localPath = path.join(WSPACE, filename);
-    if (fs.existsSync(localPath)) {
-      console.log(`[router] Syncing ${filename} to Mac...`);
+// ── GitHub Auto-Push ────────────────────────────────────────────
+/**
+ * After a Mac agent task completes, detect newly-modified files
+ * in the agent workspace, copy them to a named project folder,
+ * and push to GitHub under GITHUB_PROJECTS_OWNER.
+ *
+ * @param {string} agent      - Agent ID (e.g. 'main')
+ * @param {string} message    - Original task message
+ * @param {string} agentReply - Agent output / summary
+ */
+async function pushProjectToGitHub(agent, message, agentReply) {
+  const slug       = `ecobot-${slugify(message)}`;
+  const projectDir = path.join(PROJECTS_DIR, slug);
+  const workspace  = path.join(process.env.HOME || '/Users/mac', `.openclaw/workspace-${agent}`);
+
+  try {
+    // 1. Find files modified in the last 10 minutes in the agent workspace
+    let newFiles = [];
+    try {
+      const findOut = execSync(
+        `find "${workspace}" -type f -mmin -10 2>/dev/null`,
+        { encoding: 'utf8', timeout: 10000 }
+      ).trim();
+      newFiles = findOut.split('\n').filter(Boolean);
+    } catch (_) { /* workspace may not exist on first run */ }
+
+    if (newFiles.length === 0) {
+      console.log(`[github] No new files to push for: ${slug}`);
+      return null;
+    }
+
+    // 2. Create project directory and copy files (preserving relative structure)
+    fs.mkdirSync(projectDir, { recursive: true });
+    for (const src of newFiles) {
+      const rel  = path.relative(workspace, src);
+      const dest = path.join(projectDir, rel);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(src, dest);
+    }
+
+    // 3. Write a README if one doesn't exist
+    const readmePath = path.join(projectDir, 'README.md');
+    if (!fs.existsSync(readmePath)) {
+      const date = new Date().toISOString().split('T')[0];
+      fs.writeFileSync(readmePath,
+        `# ${slug}\n\n> 🤖 Generated by OpenClaw agent \`${agent}\` on ${date}\n\n## Task\n\n${message}\n\n## Output\n\n${(agentReply || '').substring(0, 500)}\n`
+      );
+    }
+
+    // 4. Git init + commit
+    const gitEnv = { ...process.env, GIT_AUTHOR_NAME: 'OpenClaw', GIT_AUTHOR_EMAIL: 'bot@ecopalbot.com',
+                                     GIT_COMMITTER_NAME: 'OpenClaw', GIT_COMMITTER_EMAIL: 'bot@ecopalbot.com' };
+    const runGit = (cmd) => execSync(cmd, { cwd: projectDir, encoding: 'utf8', env: gitEnv, timeout: 30000 });
+
+    // Init only if not already a repo
+    if (!fs.existsSync(path.join(projectDir, '.git'))) {
+      runGit('git init -b main');
+    }
+    runGit('git add -A');
+    try { runGit(`git commit -m "feat: ${message.substring(0, 72)}"`); }
+    catch (_) { /* nothing new to commit */ }
+
+    // 5. Create GitHub repo (skip if already exists)
+    let repoUrl;
+    try {
+      const repoJson = execSync(
+        `gh repo create "${GITHUB_PROJECTS_OWNER}/${slug}" --private --source="${projectDir}" --push 2>&1`,
+        { encoding: 'utf8', timeout: 30000 }
+      );
+      repoUrl = `https://github.com/${GITHUB_PROJECTS_OWNER}/${slug}`;
+      console.log(`[github] ✅ Created & pushed: ${repoUrl}`);
+    } catch (err) {
+      // Repo already exists — just push
       try {
-        const content = fs.readFileSync(localPath, { encoding: 'base64' });
-        await fetch(`http://${MAC_TAILSCALE_IP}:5555/fs/write`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${BRIDGE_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ filename, content, encoding: 'base64' })
-        });
-      } catch (err) {
-        console.warn(`[router] Sync failed for ${filename}:`, err.message);
+        const remote = execSync('git remote get-url origin 2>/dev/null', { cwd: projectDir, encoding: 'utf8' }).trim();
+        if (!remote) {
+          runGit(`git remote add origin https://github.com/${GITHUB_PROJECTS_OWNER}/${slug}.git`);
+        }
+        runGit('git push origin main --force');
+        repoUrl = `https://github.com/${GITHUB_PROJECTS_OWNER}/${slug}`;
+        console.log(`[github] ✅ Pushed to existing repo: ${repoUrl}`);
+      } catch (pushErr) {
+        console.warn('[github] Push failed:', pushErr.message.split('\n')[0]);
+        return null;
       }
     }
+
+    return { repoUrl, projectDir, slug };
+  } catch (err) {
+    console.warn('[github] GitHub push failed:', err.message.split('\n')[0]);
+    return null;
   }
 }
 
-/**
- * Execute a task on the local Mac via the Bridge over Tailscale.
- * @param {string} agent - Agent ID
- * @param {string} message - Task message
- * @returns {Promise<{output: string, exitCode: number}>}
- */
+// ── Supabase Task Logging ────────────────────────────────────────
+async function logTaskToSupabase(agent, message, target) {
+  try {
+    const { data: org } = await supabase.from('organizations').select('id').limit(1).single();
+    if (!org?.id) return;
+
+    let agentId = null;
+    const { data: agentRow } = await supabase
+      .from('bmad_agents').select('id').ilike('name', agent).limit(1).single();
+    if (agentRow?.id) agentId = agentRow.id;
+
+    const { error } = await supabase.from('task_state').insert({
+      organization_id:   org.id,
+      title:             message.substring(0, 100),
+      agent_id:          agentId,
+      assigned_agent_id: agentId,
+      kanban_column:     'in_progress',
+      status:            'in_progress',
+      checkpoint:        { target, agent_name: agent, source: 'telegram' },
+      last_activity:     new Date().toISOString()
+    });
+
+    if (error) console.warn('[task-router] Supabase insert error:', error.message);
+    else console.log(`[task-router] ✅ Task logged to Supabase: "${message.substring(0, 50)}..."`);
+  } catch (err) {
+    console.warn('[task-router] Supabase logging failed:', err.message);
+  }
+}
+
+// ── Mac Execution (Primary) ──────────────────────────────────────
 async function executeOnMac(agent, message) {
   try {
-    // 1. Pre-sync any files mentioned in the prompt
-    await syncFilesToMac(message);
-
     const url = `http://${MAC_TAILSCALE_IP}:5555/agent`;
     const response = await fetch(url, {
-      method: 'POST',
+      method:  'POST',
       headers: {
         'Authorization': `Bearer ${BRIDGE_TOKEN}`,
-        'Content-Type': 'application/json'
+        'Content-Type':  'application/json'
       },
-      body: JSON.stringify({ message, agent }),
-      signal: AbortSignal.timeout(300000)
+      body:   JSON.stringify({ message, agent }),
+      signal: AbortSignal.timeout(300000)  // 5 min max
     });
 
     if (!response.ok) {
@@ -129,128 +207,85 @@ async function executeOnMac(agent, message) {
     }
 
     const data = await response.json();
-    return { 
-      output: data.stdout || data.error || 'Execution finished.', 
-      exitCode: data.ok ? 0 : 1 
+    return {
+      output:   data.stdout || data.error || 'Execution finished.',
+      exitCode: data.ok ? 0 : 1
     };
   } catch (err) {
     return {
-      output: `Connection failure to Mac: ${err.message}`,
+      output:   `Mac bridge unreachable: ${err.message}`,
       exitCode: 1
     };
   }
 }
 
-
-/**
- * Execute a task on the VPS using the local OpenClaw installation.
- * @param {string} agent - Agent ID
- * @param {string} message - Task message
- * @returns {Promise<{output: string, exitCode: number}>}
- */
+// ── VPS Execution (Fallback) ─────────────────────────────────────
 async function executeOnVps(agent, message) {
-  const { execSync } = require('child_process');
-  
   const escapedMsg = message.replace(/'/g, "'\\''");
   const cmd = `${OPENCLAW_BIN} agent --agent ${agent} --message '${escapedMsg}'`;
-  
   try {
     const output = execSync(cmd, {
-      timeout: 120000,
-      encoding: 'utf8',
+      timeout:   120000,
+      encoding:  'utf8',
       maxBuffer: 1024 * 1024 * 5
     });
     return { output: output.trim(), exitCode: 0 };
   } catch (err) {
     return {
-      output: err.stdout ? err.stdout.trim() : err.message,
+      output:   err.stdout ? err.stdout.trim() : err.message,
       exitCode: err.status || 1
     };
   }
 }
 
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-/**
- * Log task to Supabase Mission Control.
- */
-async function logTaskToSupabase(agent, message, target) {
-  try {
-    const { data: org } = await supabase.from('organizations').select('id').limit(1).single();
-    await supabase.from('task_state').insert({
-      organization_id: org?.id,
-      title: message.substring(0, 100),
-      assigned_agent_id: null, // We'll look up UUID later if needed
-      kanban_column: 'in_progress',
-      status: 'in_progress',
-      metadata: { target, agent_name: agent },
-      last_activity: new Date().toISOString()
-    });
-  } catch (err) {
-    console.warn('[task-router] Supabase logging failed:', err.message);
-  }
-}
-
-/**
- * Route and execute a task.
- * @param {string} agent - Agent ID
- * @param {string} message - Task message
- * @returns {Promise<{target: string, output: string, exitCode: number}>}
- */
+// ── Main Orchestrator ────────────────────────────────────────────
 async function routeAndExecute(agent, message) {
   let target = classifyTask(message);
-  
-  // Safeguard: Allow manual override in prompt to save tokens
-  const lower = message.toLowerCase();
-  
-  // 1. Technical flags (--mode text/gui)
-  if (message.includes('--mode text')) {
-    target = 'vps';
-    message = message.replace('--mode text', '').trim();
-  } else if (message.includes('--mode gui')) {
-    target = 'mac';
-    message = message.replace('--mode gui', '').trim();
-  } 
-  // 2. Voice-friendly semantic cues ("use ui", "use text")
-  else if (lower.endsWith('use text') || lower.endsWith('using text')) {
-    target = 'vps';
-    message = message.replace(/use(ing)? text/gi, '').trim();
-  } else if (lower.endsWith('use ui') || lower.endsWith('use gui') || lower.endsWith('using gui')) {
-    target = 'mac';
-    message = message.replace(/use(ing)? (ui|gui)/gi, '').trim();
-  }
-  
-  // SYNC: Log the task to Mission Control so it updates the UI immediately
+
+  // Strip explicit mode flags from the message before sending to agent
+  message = message
+    .replace(/--mode (mac|vps|text|gui)/gi, '')
+    .replace(/use(ing)? (text|vps)/gi, '')
+    .trim();
+
+  // Log to Supabase immediately (dashboard updates instantly)
   await logTaskToSupabase(agent, message, target);
 
-  // Expand instruction semantically (Attach memory + Native prompts)
-  const expandedMessage = await expandInstruction(message, target);
-  
-  console.log(`[task-router] Routing to ${target.toUpperCase()} | Agent: ${agent} | Message: "${message.substring(0, 60)}..."`);
-  
+  // Expand instruction with memory + native prompts
+  const expanded = await expandInstruction(message, target);
+
+  console.log(`[task-router] 🎯 Routing to ${target.toUpperCase()} | Agent: ${agent} | "${message.substring(0, 60)}..."`);
+
   let result;
   if (target === 'mac') {
-    result = await executeOnMac(agent, expandedMessage);
+    result = await executeOnMac(agent, expanded);
+
+    // Fallback to VPS if Mac is unreachable
+    if (result.exitCode !== 0 && result.output.includes('unreachable')) {
+      console.warn('[task-router] ⚠️  Mac bridge down — falling back to VPS');
+      target = 'vps';
+      result = await executeOnVps(agent, expanded);
+    }
   } else {
-    result = await executeOnVps(agent, expandedMessage);
+    result = await executeOnVps(agent, expanded);
   }
-  
+
+  // After successful Mac execution: auto-push project to GitHub (non-blocking)
+  if (target === 'mac' && result.exitCode === 0) {
+    pushProjectToGitHub(agent, message, result.output).then(repo => {
+      if (repo) console.log(`[task-router] 📦 Project saved: ${repo.repoUrl}`);
+    }).catch(err => console.warn('[task-router] GitHub push error:', err.message));
+  }
+
   return { target, ...result };
 }
 
-module.exports = {
-  classifyTask,
-  executeOnMac,
-  executeOnVps,
-  routeAndExecute
-};
+module.exports = { classifyTask, executeOnMac, executeOnVps, routeAndExecute };
 
 // CLI mode: node task-router.js <agent> <message>
 if (require.main === module) {
-  const agent = process.argv[2] || 'main';
+  const agent   = process.argv[2] || 'main';
   const message = process.argv[3] || 'Hello';
-  
   routeAndExecute(agent, message).then(result => {
     console.log(`\n[Result] Target: ${result.target} | Exit: ${result.exitCode}`);
     console.log(result.output);
